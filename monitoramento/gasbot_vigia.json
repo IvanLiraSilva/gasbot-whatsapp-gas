@@ -1,0 +1,84 @@
+{
+  "name": "GasBot - Vigia",
+  "nodes": [
+    {
+      "id": "e9c5fd40-62a0-4f90-b408-e567f4e79e08",
+      "name": "A cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "93f2b8d7-13c7-40b7-a12b-cf12b4950b27",
+      "name": "Verificar tudo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Node: Verificar tudo  (Code, \"Run Once for All Items\")\n// Roda a cada 5 minutos. Confere Evolution/WhatsApp, Ollama, Whisper e Piper.\n// Só envia e-mail quando há mudança (caiu, voltou) ou um lembrete a cada 1 hora.\n\n// ================== CONFIGURE AQUI ==================\nconst EVOLUTION_URL = \"http://localhost:8080\";\nconst EVOLUTION_APIKEY = \"COLE_AQUI_A_CHAVE_DA_EVOLUTION\";   // a mesma usada nos nós \"Enviar...\"\nconst INSTANCIA = \"GasBot\";\nconst OLLAMA_URL = \"http://localhost:11434\";\nconst WHISPER_URL = \"http://localhost:9000\";\nconst PIPER_URL = \"http://localhost:5051\";\n\nconst FALHAS_PARA_AVISAR = 2;   // verificações seguidas com problema antes de avisar (2 x 5 min = 10 min)\nconst LEMBRETE_MINUTOS = 60;    // se o problema continuar, lembra a cada 60 min\nconst REINICIO_MINUTOS = 15;    // tenta reiniciar a instância no máximo a cada 15 min\nconst FORCAR_TESTE = false;     // true = manda um e-mail de teste agora (volte para false depois)\n// =====================================================\n\nconst req = (opcoes) => this.helpers.httpRequest(opcoes);\n\n// Qualquer resposta do serviço (mesmo erro 404) quer dizer que ele está no ar.\nasync function consultar(url, headers) {\n  try {\n    const corpo = await req({ method: \"GET\", url, headers: headers || {}, timeout: 8000, json: true });\n    return { ok: true, corpo };\n  } catch (e) {\n    const codigo = Number(e.httpCode || e.statusCode || (e.response && e.response.status) || 0);\n\n    if (codigo) {\n      return { ok: true, corpo: null, codigo };\n    }\n\n    return { ok: false, erro: String((e && e.message) || e).slice(0, 100) };\n  }\n}\n\nconst [evo, ollama, whisper, piper] = await Promise.all([\n  consultar(`${EVOLUTION_URL}/instance/connectionState/${INSTANCIA}`, { apikey: EVOLUTION_APIKEY }),\n  consultar(`${OLLAMA_URL}/api/tags`),\n  consultar(`${WHISPER_URL}/docs`),\n  consultar(`${PIPER_URL}/`)\n]);\n\nconst problemas = {};\nlet estadoWhatsapp = \"\";\n\nconst NOME_EVO = \"Evolution API\";\nconst NOME_ZAP = `WhatsApp (instância ${INSTANCIA})`;\n\nif (!evo.ok) {\n  problemas[NOME_EVO] = `não responde (${evo.erro})`;\n} else {\n  estadoWhatsapp = String((evo.corpo && ((evo.corpo.instance && evo.corpo.instance.state) || evo.corpo.state)) || \"\");\n\n  if (!evo.corpo) {\n    problemas[NOME_EVO] = `respondeu com erro HTTP ${evo.codigo} (confira a chave da Evolution)`;\n  } else if (estadoWhatsapp !== \"open\") {\n    problemas[NOME_ZAP] = `desconectado (estado: ${estadoWhatsapp || \"desconhecido\"})`;\n  }\n}\n\nif (!ollama.ok) problemas[\"Ollama (IA)\"] = `não responde (${ollama.erro})`;\nif (!whisper.ok) problemas[\"Whisper (áudio para texto)\"] = `não responde (${whisper.erro})`;\nif (!piper.ok) problemas[\"Piper (voz)\"] = `não responde (${piper.erro})`;\n\n// ---------- memória entre as execuções ----------\nconst agora = Date.now();\nconst sd = $getWorkflowStaticData(\"global\");\nsd.vigia = sd.vigia || { falhas: {}, avisados: {}, ultimoLembrete: 0, ultimoReinicio: 0 };\nconst v = sd.vigia;\n\nconst voltaram = [];\n\nfor (const nome of Object.keys(v.falhas)) {\n  if (!problemas[nome]) {\n    if (v.avisados[nome]) voltaram.push(nome);\n    delete v.falhas[nome];\n    delete v.avisados[nome];\n  }\n}\n\nconst nomes = Object.keys(problemas);\n\nfor (const nome of nomes) {\n  v.falhas[nome] = (v.falhas[nome] || 0) + 1;\n}\n\nconst novos = nomes.filter(n => v.falhas[n] >= FALHAS_PARA_AVISAR && !v.avisados[n]);\nconst emAberto = nomes.filter(n => v.avisados[n]);\nconst lembrar = novos.length === 0 && emAberto.length > 0 && (agora - v.ultimoLembrete) > LEMBRETE_MINUTOS * 60000;\n\n// ---------- tentativa de reinício da conexão do WhatsApp ----------\nlet reinicio = \"\";\n\nif (\n  problemas[NOME_ZAP] &&\n  v.falhas[NOME_ZAP] >= FALHAS_PARA_AVISAR &&\n  [\"connecting\", \"close\"].includes(estadoWhatsapp) &&\n  (agora - v.ultimoReinicio) > REINICIO_MINUTOS * 60000\n) {\n  v.ultimoReinicio = agora;\n\n  try {\n    await req({\n      method: \"PUT\",\n      url: `${EVOLUTION_URL}/instance/restart/${INSTANCIA}`,\n      headers: { apikey: EVOLUTION_APIKEY },\n      timeout: 15000\n    });\n    reinicio = \"Tentei reiniciar a instância automaticamente.\";\n  } catch (e) {\n    reinicio = \"Tentei reiniciar a instância, mas não consegui.\";\n  }\n}\n\n// ---------- monta o e-mail (ou não envia nada) ----------\nconst hora = new Date().toLocaleString(\"pt-BR\", { timeZone: \"America/Sao_Paulo\" });\nconst linhas = (lista, usarProblema) => lista.map(n => `• ${n}${usarProblema ? \": \" + problemas[n] : \"\"}`).join(\"\\n\");\n\nfunction dicasPara(lista) {\n  const dicas = [];\n\n  if (lista.includes(NOME_ZAP)) {\n    dicas.push(\"• WhatsApp desconectado: abra http://localhost:8080/manager, entre na instância e clique em Connect (leia o QR Code se ele pedir).\");\n  }\n\n  if (lista.some(n => n !== NOME_ZAP)) {\n    dicas.push(\"• Serviço que não responde: rode 'docker ps' e veja se o container está ligado. Se estiver parado, use 'docker start nome_do_container'. O Ollama é um programa do Windows: confira se está aberto.\");\n  }\n\n  dicas.push(\"• Se o computador acabou de voltar da suspensão: rode 'wsl --shutdown' no PowerShell e abra o Docker Desktop de novo.\");\n\n  return dicas.join(\"\\n\");\n}\n\nlet assunto = \"\";\nlet texto = \"\";\n\nif (FORCAR_TESTE) {\n  assunto = \"[GasBot] Teste do vigia\";\n  texto =\n    `Teste feito em ${hora}.\\n\\n` +\n    (nomes.length ? `Problemas agora:\\n${linhas(nomes, true)}` : \"Tudo funcionando: Evolution, WhatsApp, Ollama, Whisper e Piper.\");\n} else if (novos.length) {\n  novos.forEach(n => { v.avisados[n] = true; });\n  v.ultimoLembrete = agora;\n\n  assunto = `[GasBot] PROBLEMA: ${novos.join(\", \")}`;\n  texto =\n    `Detectado em ${hora}.\\n\\n${linhas(novos, true)}\\n\\n` +\n    (reinicio ? reinicio + \"\\n\\n\" : \"\") +\n    \"O que fazer:\\n\" +\n    dicasPara(novos) + \"\\n\\n\" +\n    (voltaram.length ? `Já voltaram ao normal:\\n${linhas(voltaram, false)}\\n\\n` : \"\") +\n    (emAberto.length ? `Ainda com problema desde antes:\\n${linhas(emAberto, true)}` : \"\");\n} else if (voltaram.length) {\n  assunto = `[GasBot] Voltou ao normal: ${voltaram.join(\", \")}`;\n  texto =\n    `Verificado em ${hora}.\\n\\n${linhas(voltaram, false)}\\n\\n` +\n    (emAberto.length ? `Ainda com problema:\\n${linhas(emAberto, true)}` : \"Está tudo funcionando de novo.\");\n} else if (lembrar) {\n  v.ultimoLembrete = agora;\n  assunto = `[GasBot] Lembrete: continua com problema`;\n  texto = `Verificado em ${hora}.\\n\\n${linhas(emAberto, true)}`;\n}\n\nif (!assunto) {\n  return [];\n}\n\nreturn [{ json: { assunto, texto } }];\n"
+      }
+    },
+    {
+      "id": "5fac989a-22e5-40cd-b2da-f5cfe6b28777",
+      "name": "Enviar e-mail de aviso",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "fromEmail": "SEU_EMAIL@gmail.com",
+        "toEmail": "SEU_EMAIL@gmail.com",
+        "subject": "={{ $json.assunto }}",
+        "emailFormat": "text",
+        "text": "={{ $json.texto }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "A cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Verificar tudo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar tudo": {
+      "main": [
+        [
+          {
+            "node": "Enviar e-mail de aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

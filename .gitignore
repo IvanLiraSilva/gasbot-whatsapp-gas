@@ -1,0 +1,6 @@
+.env
+*.key
+node_modules/
+.DS_Store
+# nunca suba exports do n8n com chaves ou telefones reais
+*_original.json

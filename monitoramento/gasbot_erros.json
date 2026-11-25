@@ -1,0 +1,75 @@
+{
+  "name": "GasBot - Erros",
+  "nodes": [
+    {
+      "id": "9cc0ee92-791b-4e2e-b7f0-360f41ab93b5",
+      "name": "Erro no GasBot",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "5e07fad3-4914-40fc-af72-ee7e80358b63",
+      "name": "Montar aviso de erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Node: Montar aviso de erro  (Code, \"Run Once for All Items\")\n// Recebe o erro de qualquer execução do GasBot e monta o e-mail.\n// Para não lotar sua caixa, o mesmo erro no mesmo nó só avisa 1 vez a cada 10 minutos.\n\nconst e = $input.first().json;\n\nconst fluxo = (e.workflow && e.workflow.name) || \"workflow\";\nconst no = (e.execution && e.execution.lastNodeExecuted) || \"desconhecido\";\nconst mensagem = (e.execution && e.execution.error && e.execution.error.message) || \"sem mensagem\";\nconst link = (e.execution && e.execution.url) || \"\";\nconst idExecucao = (e.execution && e.execution.id) || \"\";\n\nconst sd = $getWorkflowStaticData(\"global\");\nsd.erros = sd.erros || {};\n\nconst chave = `${fluxo}|${no}`;\nconst agora = Date.now();\n\nif (sd.erros[chave] && agora - sd.erros[chave] < 10 * 60000) {\n  return [];\n}\n\nsd.erros[chave] = agora;\n\nconst hora = new Date().toLocaleString(\"pt-BR\", { timeZone: \"America/Sao_Paulo\" });\n\nreturn [{\n  json: {\n    assunto: `[GasBot] ERRO no nó \"${no}\"`,\n    texto:\n      `Erro em ${hora}\\n\\n` +\n      `Fluxo: ${fluxo}\\n` +\n      `Nó que falhou: ${no}\\n` +\n      `Mensagem: ${mensagem}\\n` +\n      (idExecucao ? `Execução: #${idExecucao}\\n` : \"\") +\n      (link ? `Abrir: ${link}\\n` : \"\") +\n      `\\nO cliente pode ter ficado sem resposta. Abra a execução no n8n (aba Executions) para ver o que aconteceu.`\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "c461f262-cc21-445c-9bbc-7f8c054c56e1",
+      "name": "Enviar e-mail de erro",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "fromEmail": "SEU_EMAIL@gmail.com",
+        "toEmail": "SEU_EMAIL@gmail.com",
+        "subject": "={{ $json.assunto }}",
+        "emailFormat": "text",
+        "text": "={{ $json.texto }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Erro no GasBot": {
+      "main": [
+        [
+          {
+            "node": "Montar aviso de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar aviso de erro": {
+      "main": [
+        [
+          {
+            "node": "Enviar e-mail de erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}

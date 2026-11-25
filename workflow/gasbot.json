@@ -1,0 +1,2852 @@
+{
+  "name": "GasBot - Agente de gás",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const produto = $json;\n\nconst dadosPedido =\n  $('Processar etapa Atendimento').first().json;\n\nconst pagamento =\n  String(dadosPedido.pagamento || \"\")\n    .toUpperCase()\n    .trim();\n\nconst quantidade =\n  Number(dadosPedido.quantidade || 0);\n\nlet valorUnitario = 0;\n\n// PIX, DINHEIRO e CARTÃO = PREÇO À VISTA\nif (\n  pagamento === \"PIX\" ||\n  pagamento === \"DINHEIRO\" ||\n  pagamento === \"CARTAO\"\n) {\n\n  valorUnitario =\n    Number(produto[\"Preço à Vista\"] || 0);\n}\n\n// NOTINHA = PREÇO NOTINHA\nelse if (pagamento === \"NOTINHA\") {\n\n  valorUnitario =\n    Number(produto[\"Preço Notinha\"] || 0);\n}\n\n// SEGURANÇA\nelse {\n\n  throw new Error(\n    `Forma de pagamento inválida: ${pagamento}`\n  );\n}\n\nif (!valorUnitario || valorUnitario <= 0) {\n\n  throw new Error(\n    `Preço não encontrado para o produto ${dadosPedido.produto}`\n  );\n}\n\nconst valorTotal =\n  valorUnitario * quantidade;\n\nreturn [{\n  json: {\n    ...dadosPedido,\n\n    valor_unitario: valorUnitario,\n    valor_total: valorTotal\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1392,
+        -512
+      ],
+      "id": "63a6f515-c1e7-4c2e-8f0a-5883fe7bcdc2",
+      "name": "Calcular Preço"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\n\n// Chave Pix. Para mudar, edite aqui (e também no node \"Processar etapa Atendimento\").\nconst chavePix = \"(00)90000-0000\";\n\nfunction dinheiro(valor) {\n  return Number(valor || 0).toFixed(2).replace(\".\", \",\");\n}\n\nconst nome = String(d.nome || \"\").trim();\nconst endereco = String(d.endereco || \"\").trim();\n\nlet novaEtapa = \"\";\nlet resposta = \"\";\n\nif (nome && endereco) {\n  // NOVO: sempre mostra o pedido completo (antes, só mostrava nome e endereço)\n  novaEtapa = \"CONFIRMAR_PEDIDO\";\n\n  const abertura =\n    d.motivo_calculo === \"CORRECAO\"\n      ? `Pronto, atualizei seu pedido! 😊\\n\\n`\n      : `Perfeito, ${nome}! Confira seu pedido:\\n\\n`;\n\n  const linhaPix =\n    String(d.pagamento || \"\").toUpperCase() === \"PIX\" && chavePix\n      ? `Chave Pix: ${chavePix}\\n`\n      : \"\";\n\n  resposta =\n    abertura +\n    `Produto: ${d.produto}\\n` +\n    `Quantidade: ${d.quantidade}\\n` +\n    `Valor unitário: R$ ${dinheiro(d.valor_unitario)}\\n` +\n    `Valor total: R$ ${dinheiro(d.valor_total)}\\n` +\n    `Pagamento: ${d.pagamento}\\n` +\n    linhaPix +\n    `Nome: ${nome}\\n` +\n    `Endereço: ${endereco}\\n\\n` +\n    `Está tudo correto? Responda SIM para confirmar ou NÃO para corrigir.`;\n\n} else {\n  novaEtapa = \"AGUARDANDO_NOME\";\n  resposta = \"Perfeito! Para continuar, qual é o seu nome?\";\n}\n\nreturn [{\n  json: {\n    ...d,\n    etapa: novaEtapa,\n    resposta\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1232,
+        -512
+      ],
+      "id": "efe00604-fcf8-47ba-a0b8-8e534298c205",
+      "name": "Apos Calcular Preço"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/message/sendText/GasBot",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "COLE_AQUI_A_CHAVE_DA_EVOLUTION"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: $('Whatsapp').first().json.body.data.key.remoteJidAlt\n      ? $('Whatsapp').first().json.body.data.key.remoteJidAlt.replace('@s.whatsapp.net', '')\n      : $('Whatsapp').first().json.body.sender.replace('@s.whatsapp.net', ''),\n\n    text: $('Apos Calcular Preço').first().json.resposta\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -896,
+        -512
+      ],
+      "id": "342da2fb-4ed2-4c4e-a284-558dabd42831",
+      "name": "Confirmar Dados"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "evolution-teste",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -4832,
+        -240
+      ],
+      "id": "f74020ed-f79c-405f-924e-50a008fd39c1",
+      "name": "Whatsapp"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 451256105,
+          "mode": "list",
+          "cachedResultName": "Atendimentos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Telefone",
+              "lookupValue": "={{ $json.Telefone }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": false
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -3424,
+        -256
+      ],
+      "id": "8ee18834-9f5f-4b96-9ee7-1e03d35d11c5",
+      "name": "Buscar Atendimento Cliente",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst assuntoGas =\n  $('Filtro antes da planilha').first().json.assunto_gas === true;\n\n// NOVO: compara telefones ignorando o \"9\" extra do celular (551199999999 e 5511999999999\n// são a mesma pessoa): usa DDD + últimos 8 dígitos.\nfunction chaveTelefone(telefone) {\n  const digitos = String(telefone || \"\").replace(/\\D/g, \"\");\n  const semPais = digitos.startsWith(\"55\") && digitos.length >= 12 ? digitos.slice(2) : digitos;\n\n  return semPais.length >= 10 ? semPais.slice(0, 2) + semPais.slice(-8) : digitos;\n}\n\n// Telefone de quem acabou de escrever. Só vale atendimento desse telefone.\nconst normalizada = $('Normalizar Mensagem').first().json;\nconst telefoneAtual = chaveTelefone(normalizada.telefone || normalizada.Telefone);\n\nconst atendimentos = items.filter(item =>\n  item.json &&\n  Object.keys(item.json).length > 0 &&\n  item.json.row_number &&\n  chaveTelefone(item.json.Telefone) === telefoneAtual\n);\n\nif (!atendimentos.length) {\n  return [{\n    json: {\n      assunto_gas: assuntoGas,\n      atendimento_ativo: false,\n      Etapa: \"\"\n    }\n  }];\n}\n\nconst ordenados = [...atendimentos].sort((a, b) => {\n  const linhaA = Number(a.json.row_number || 0);\n  const linhaB = Number(b.json.row_number || 0);\n\n  return linhaB - linhaA;\n});\n\nconst atual = ordenados[0].json;\n\nconst atendimentoAtivo =\n  String(atual.Etapa || \"\").trim() !== \"\" &&\n  String(atual.Etapa || \"\").trim() !== \"FINALIZADO\";\n\nreturn [{\n  json: {\n    ...atual,\n    assunto_gas: assuntoGas,\n    atendimento_ativo: atendimentoAtivo\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3216,
+        -256
+      ],
+      "id": "e275ce86-5b9b-4afa-82e4-3a3bd0b10e42",
+      "name": "Selecionar Atendimento Atual"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7af371c1-f0bb-4ac1-a27d-b6ab4f20594f",
+              "leftValue": "={{ $json.Telefone}}",
+              "rightValue": "FINALIZADO",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2800,
+        -272
+      ],
+      "id": "d04a11b3-15d0-40e2-b945-25b2371412cf",
+      "name": "Cliente possui atendimento?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f6212657-1e5d-499f-b65f-8c213fdd00ec",
+              "leftValue": "={{ $json.Etapa }}",
+              "rightValue": "FINALIZADO",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2592,
+        -272
+      ],
+      "id": "8fa50c0a-b3b5-431d-a45a-2834461bba80",
+      "name": "Atendiemento está ativo?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const atendimento = $('Selecionar Atendimento Atual').first().json;\n\n// Registro das conversas em andamento (usado pelo \"Filtro antes da planilha\")\nconst registro = $getWorkflowStaticData('global');\nregistro.ativos = registro.ativos || {};\n\n// mesma chave usada no filtro (ignora o \"9\" extra do celular)\nfunction chaveTelefone(telefone) {\n  const digitos = String(telefone || \"\").replace(/\\D/g, \"\");\n  const semPais = digitos.startsWith(\"55\") && digitos.length >= 12 ? digitos.slice(2) : digitos;\n\n  return semPais.length >= 10 ? semPais.slice(0, 2) + semPais.slice(-8) : digitos;\n}\n\nfunction marcarConversa(telefone, ativa) {\n  const chave = chaveTelefone(telefone);\n\n  if (!chave) {\n    return;\n  }\n\n  if (ativa) {\n    registro.ativos[chave] = Date.now();\n  } else {\n    delete registro.ativos[chave];\n  }\n}\n\n// Configurações do negócio. Ficam aqui no código para não consultar a planilha a cada mensagem.\n// Para mudar a chave Pix, edite abaixo (e também no node \"Após Calcular Preço\").\nconst configuracoes = {\n  \"Empresa\": \"Distribuidora Exemplo\",\n  \"Chave Pix\": \"(00)90000-0000\",\n  \"Tempo mínimo\": \"20\",\n  \"Tempo máximo\": \"40\",\n  \"Mensagem final\": \"Obrigado pela preferência!\"\n};\n\nconst chavePix = configuracoes[\"Chave Pix\"] || \"\";\n\nconst editFields1 = $('Normalizar Mensagem').first().json;\n\n// NOVO: se a mensagem veio em áudio, usa o texto transcrito\nlet textoMensagem = editFields1.mensagem_cliente;\n\nif (editFields1.tipo_mensagem === \"audioMessage\") {\n  try {\n    textoMensagem = $('Montar texto do áudio').first().json.mensagem_cliente;\n  } catch (erro) {\n    // o áudio não foi transcrito (ex.: longo demais): segue sem texto\n  }\n}\n\nconst mensagem = String(textoMensagem || \"\").trim();\nconst mensagemLower = mensagem.toLowerCase();\n\nconst mensagemNormalizada = mensagemLower\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .trim();\n\nconst etapa = String(atendimento.Etapa || \"\").trim();\n\nconst comprovanteRecebido =\n  editFields1.comprovante_recebido === true ||\n  String(editFields1.comprovante_recebido).toLowerCase() === \"true\";\n\nconst parecePedido =\n  /\\b(quero|preciso|manda|mandar|ga[sz]|botijao|bujao|p13|p45|pix|cartao|dinheiro|notinha)\\b/i.test(mensagemNormalizada) ||\n  /\\bp\\d+\\b/i.test(mensagemNormalizada);\n\nlet novaEtapa = etapa;\nlet nome = String(atendimento.Nome || \"\").trim();\nlet endereco = String(atendimento.Endereco || \"\").trim();\nlet produto = String(atendimento.Produto || \"\").trim();\nlet quantidade = atendimento.Quantidade || \"\";\nlet pagamento = String(atendimento.Pagamento || \"\").trim().toUpperCase();\n\nlet valorUnitario = Number(atendimento.ValorUnitario || 0);\nlet valorTotal = Number(atendimento.ValorTotal || 0);\n\n// NOVO: valor da nota que o cliente vai pagar quando precisa de troco (vazio = sem troco)\nlet troco = atendimento.Troco ? Number(String(atendimento.Troco).replace(\",\", \".\")) || \"\" : \"\";\n\nlet resposta = \"\";\nlet novoAtendimento = false;\nlet idAtendimentoFinal = atendimento.IDAtendimento;\nlet rowNumberFinal = atendimento.row_number;\n\n// Indica aos próximos nodes que o preço está sendo recalculado\n// por causa de uma correção do cliente.\nlet motivoCalculo = \"\";\n\n// ======================================================\n// FUNÇÕES AUXILIARES\n// ======================================================\n\n// NOVO: limite de segurança. Números acima disso não são aceitos como quantidade\n// (ex.: o 123 de um endereço). Ajuste se vender em volume maior.\nconst QUANTIDADE_MAXIMA = 50;\n\nfunction normalizar(texto) {\n  return String(texto || \"\")\n    .toLowerCase()\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .trim();\n}\n\n// NOVO: entende SIM / NÃO mesmo com pontuação ou frase (\"Sim.\", \"Não, obrigado\", \"Isso mesmo\").\n// A transcrição de áudio sempre vem com ponto final, então a comparação exata não servia.\nfunction interpretarSimNao(texto) {\n  const t = normalizar(texto).replace(/[^a-z\\s]/g, \" \").replace(/\\s+/g, \" \").trim();\n\n  if (!t) {\n    return null;\n  }\n\n  const primeira = t.split(\" \")[0];\n\n  if (primeira === \"nao\" || primeira === \"n\") {\n    return \"NAO\";\n  }\n\n  if ([\"sim\", \"s\", \"ok\", \"certo\", \"correto\", \"confirmo\", \"confirmado\", \"positivo\", \"claro\", \"beleza\", \"blz\", \"uhum\", \"aham\"].includes(primeira)) {\n    return \"SIM\";\n  }\n\n  if (/\\b(nao|errado|incorreto)\\b/.test(t)) {\n    return \"NAO\";\n  }\n\n  if (/\\b(sim|correto|confirmo|isso mesmo|pode usar|tudo certo)\\b/.test(t)) {\n    return \"SIM\";\n  }\n\n  return null;\n}\n\nfunction extrairQuantidade(texto) {\n  // CORRIGIDO: o \"13\" de \"P13\" / \"P 13\" / \"13 kg\" e o \"45\" de \"P45\" não são quantidade\n  const t = normalizar(texto)\n    .replace(/\\bp[\\s-]?(13|45)\\b/g, \" \")\n    .replace(/\\b(13|45)\\s?(kg|quilos?)\\b/g, \" \");\n\n  const numerosPorExtenso = {\n    um: 1,\n    uma: 1,\n    dois: 2,\n    duas: 2,\n    tres: 3,\n    quatro: 4,\n    cinco: 5,\n    seis: 6,\n    sete: 7,\n    oito: 8,\n    nove: 9,\n    dez: 10\n  };\n\n  const numeroDigitado = t.match(/\\b(\\d+)\\b/);\n\n  if (numeroDigitado) {\n    const n = Number(numeroDigitado[1]);\n    return n > 0 && n <= QUANTIDADE_MAXIMA ? n : null;\n  }\n\n  for (const [palavra, numero] of Object.entries(numerosPorExtenso)) {\n    const regex = new RegExp(\"\\\\b\" + palavra + \"\\\\b\", \"i\");\n\n    if (regex.test(t)) {\n      return numero;\n    }\n  }\n\n  return null;\n}\n\nfunction extrairPagamento(texto) {\n  const t = normalizar(texto);\n\n  if (/\\bpix\\b/.test(t)) {\n    return \"PIX\";\n  }\n\n  if (\n    t.includes(\"cartao\") ||\n    t.includes(\"credito\") ||\n    t.includes(\"debito\")\n  ) {\n    return \"CARTAO\";\n  }\n\n  if (t.includes(\"dinheiro\")) {\n    return \"DINHEIRO\";\n  }\n\n  if (\n    t.includes(\"notinha\") ||\n    t.includes(\"a prazo\") ||\n    t.includes(\"prazo\") ||\n    t.includes(\"fiado\")\n  ) {\n    return \"NOTINHA\";\n  }\n\n  return null;\n}\n\nfunction extrairProduto(texto) {\n  const t = normalizar(texto);\n\n  // CORRIGIDO: aceita \"P13\", \"P 13\" e \"P-13\"\n  if (/\\bp[\\s-]?45\\b/.test(t)) {\n    return \"P45\";\n  }\n\n  if (/\\bp[\\s-]?13\\b/.test(t)) {\n    return \"P13\";\n  }\n\n  // NOVO: \"gás normal\", \"gás de cozinha\", \"botijão comum\"... é o P13\n  if (/\\b(ga[sz]|botijao|bujao)\\s+(de\\s+cozinha|normal|comum|residencial|domestico|padrao)\\b/.test(t)) {\n    return \"P13\";\n  }\n\n  return null;\n}\n\n// NOVO: usado só quando o bot acabou de perguntar o modelo (\"P13 ou P45?\").\n// Aí o cliente pode responder só \"normal\", \"comum\", \"de cozinha\"... e isso é o P13.\nfunction extrairProdutoPerguntado(texto) {\n  const direto = extrairProduto(texto);\n\n  if (direto) {\n    return direto;\n  }\n\n  const t = normalizar(texto);\n\n  if (/\\b(normal|comum|de cozinha|cozinha|residencial|domestico|padrao)\\b/.test(t)) {\n    return \"P13\";\n  }\n\n  return null;\n}\n\n// NOVO: aviso amigável ao começar um novo pedido de quem já é cliente\nfunction saudacaoNovoPedido() {\n  return nome\n    ? \"Claro, \" + nome + \"! 😊 Só um instante, já vamos prosseguir com seu novo pedido.\\n\\n\"\n    : \"Claro! 😊 \";\n}\n\n// NOVO: começa um novo pedido aproveitando o que o cliente já disse\n// (\"quero outro gás normal\", \"mais 2 de cozinha\") e só pergunta o que falta.\nfunction prepararNovoPedido(texto, comSaudacao = true) {\n  produto = extrairProdutoPerguntado(normalizar(texto)) || \"\";\n  quantidade = extrairQuantidade(texto) || \"\";\n  pagamento = \"\";\n  valorUnitario = 0;\n  valorTotal = 0;\n  troco = \"\";\n\n  // Respondeu SIM em \"Deseja mais alguma coisa?\": só \"Claro!\", sem o aviso com o nome\n  const abertura = comSaudacao ? saudacaoNovoPedido() : \"Claro! 😊 \";\n\n  if (!produto) {\n    novaEtapa = \"AGUARDANDO_PRODUTO\";\n    resposta =\n      abertura +\n      \"Você deseja P13 (o gás de cozinha normal) ou P45?\" +\n      (quantidade ? \"\" : \" E quantos botijões?\");\n  } else if (!quantidade) {\n    novaEtapa = \"AGUARDANDO_QUANTIDADE\";\n    resposta = abertura + \"Quantos botijões você deseja?\";\n  } else {\n    novaEtapa = \"AGUARDANDO_PAGAMENTO\";\n    resposta =\n      abertura +\n      \"Como deseja realizar o pagamento? Pix, dinheiro, cartão ou notinha?\";\n  }\n}\n\n// NOVO: cliente desistiu / respondeu SIM por engano (\"não quero mais nada\", \"foi engano\").\n// Só vale quando a mensagem não traz produto nem quantidade (\"P13, nada de P45\" não cancela).\nfunction cancelouAtendimento(texto) {\n  const t = normalizar(texto).replace(/[^a-z0-9\\s]/g, \" \").replace(/\\s+/g, \" \").trim();\n\n  // Se falou produto, quantidade ou pagamento, está pedindo (não desistindo)\n  if (!t || extrairProdutoPerguntado(t) || extrairQuantidade(texto) || extrairPagamento(texto)) {\n    return false;\n  }\n\n  // \"não sei qual\", \"não lembro\": o cliente tem dúvida, não desistiu\n  if (/\\bnao (sei|lembro|entendi|conheco|tenho certeza)\\b/.test(t)) {\n    return false;\n  }\n\n  // \"não quero esse, quero outro\": ainda quer comprar\n  const semNegativa = t.replace(/\\bnao (quero|vou querer|preciso)\\b/g, \" \");\n\n  if (/\\b(quero|preciso|manda|mandar|outro|outra|troca|trocar)\\b/.test(semNegativa)) {\n    return false;\n  }\n\n  return (\n    /^(nao|n)$/.test(t) ||\n    /\\b(nada|nenhum|nenhuma|engano|enganado|errado|errei|desisti|desistir|cancela|cancelar|cancelado|sem querer|deixa pra la|esquece|so isso|mais nada|por hoje|agora nao|por enquanto nao|pode encerrar|encerrar|encerra)\\b/.test(t) ||\n    /\\bnao (quero|vou querer|preciso|precisa|obrigado|obrigada|e isso|e nada)\\b/.test(t) ||\n    /^(obrigado|obrigada|valeu)\\b/.test(t)\n  );\n}\n\nfunction temModeloNaoDisponivel(texto) {\n  const t = normalizar(texto);\n  const match = t.match(/\\bp(\\d+)\\b/);\n\n  if (!match) {\n    return false;\n  }\n\n  return match[1] !== \"13\" && match[1] !== \"45\";\n}\n\nfunction gerarIdAtendimento() {\n  const agora = new Date();\n\n  const yyyy = agora.getFullYear();\n  const mm = String(agora.getMonth() + 1).padStart(2, \"0\");\n  const dd = String(agora.getDate()).padStart(2, \"0\");\n\n  const aleatorio = String(\n    Math.floor(100000 + Math.random() * 900000)\n  );\n\n  return \"ATD-\" + yyyy + mm + dd + \"-\" + aleatorio;\n}\n\nfunction formatarValor(valor) {\n  return Number(valor || 0).toFixed(2).replace(\".\", \",\");\n}\n\n// NOVO: troco. Descobre \"para quanto\" a partir de números (\"100\", \"R$ 50,00\") ou palavras (\"cem\").\nfunction extrairValorTroco(texto) {\n  const t = normalizar(texto);\n\n  // CORRIGIDO: entende \"10.500\", \"10.500,00\", \"11.000,00\", \"10500\", \"50,50\", \"R$ 100\"\n  const digitado = t.match(\n    /\\d{1,3}(?:\\.\\d{3})+(?:,\\d{1,2})?|\\d+\\.\\d{1,2}(?!\\d)|\\d+(?:,\\d{1,2})?/\n  );\n\n  if (digitado) {\n    const bruto = digitado[0];\n    const numero = /^\\d{1,3}(?:\\.\\d{3})+/.test(bruto)\n      ? bruto.replace(/\\./g, \"\").replace(\",\", \".\")   // ponto = milhar\n      : bruto.replace(\",\", \".\");                       // vírgula ou ponto = centavos\n\n    return Number(numero);\n  }\n\n  const porExtenso = {\n    dez: 10, vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60,\n    setenta: 70, oitenta: 80, noventa: 90, cem: 100, cento: 100,\n    duzentos: 200, trezentos: 300, quatrocentos: 400, quinhentos: 500\n  };\n\n  // Soma as palavras achadas: \"duzentos e cinquenta\" = 200 + 50\n  let soma = 0;\n\n  for (const [palavra, numero] of Object.entries(porExtenso)) {\n    if (new RegExp(\"\\\\b\" + palavra + \"\\\\b\").test(t)) {\n      soma += numero;\n    }\n  }\n\n  return soma > 0 ? soma : null;\n}\n\nfunction disseSemTroco(texto) {\n  const t = normalizar(texto).replace(/[^a-z\\s]/g, \" \").replace(/\\s+/g, \" \").trim();\n\n  return (\n    /\\b(sem troco|nao preciso|nao precisa|nao vou precisar|nao tem problema|tenho trocado|trocado|certinho|valor certo|valor exato|exato)\\b/.test(t) ||\n    interpretarSimNao(texto) === \"NAO\"\n  );\n}\n\n// NOVO: resumo final, depois que o cliente informou o troco\nfunction resumoFinalPedido() {\n  return (\n    \"Pedido confirmado! 😊\\n\\n\" +\n    \"Produto: \" + produto + \"\\n\" +\n    \"Quantidade: \" + quantidade + \"\\n\" +\n    \"Valor total: R$ \" + formatarValor(valorTotal) + \"\\n\" +\n    \"Pagamento: \" + pagamento + \"\\n\" +\n    (troco\n      ? \"Troco para: R$ \" + formatarValor(troco) +\n        \" (levar R$ \" + formatarValor(troco - valorTotal) + \" de troco)\\n\"\n      : \"Troco: não precisa\\n\") +\n    \"Nome: \" + nome + \"\\n\" +\n    \"Endereço: \" + endereco + \"\\n\\n\" +\n    \"Seu pedido será encaminhado para entrega.\"\n  );\n}\n\nfunction resumoPedido() {\n  return (\n    \"Perfeito, \" + (nome || \"cliente\") + \"! Confira seu pedido:\\n\\n\" +\n    \"Produto: \" + produto + \"\\n\" +\n    \"Quantidade: \" + quantidade + \"\\n\" +\n    \"Valor unitário: R$ \" + formatarValor(valorUnitario) + \"\\n\" +\n    \"Valor total: R$ \" + formatarValor(valorTotal) + \"\\n\" +\n    \"Pagamento: \" + pagamento + \"\\n\" +\n    (pagamento === \"PIX\" && chavePix ? \"Chave Pix: \" + chavePix + \"\\n\" : \"\") +\n    \"Nome: \" + nome + \"\\n\" +\n    \"Endereço: \" + endereco + \"\\n\\n\" +\n    \"Está tudo correto? Responda SIM para confirmar ou NÃO para corrigir.\"\n  );\n}\n\n// NOVO: acha onde o endereço começa (\"Rua\", \"Av\", \"Travessa\"...) no texto já normalizado.\nfunction acharInicioEndereco(t) {\n  return t.search(\n    /\\b(rua|r\\.|av\\.?|avenida|travessa|alameda|estrada|rodovia|praca|quadra|lote|vila|beco|conjunto|residencial|condominio|sitio|chacara|fazenda)(?=[\\s.])/\n  );\n}\n\n// NOVO: diz se o texto (já normalizado) fala de produto, quantidade ou pagamento.\nfunction pareceTextoDePedido(t) {\n  return (\n    /\\b(p13|p45|pix|dinheiro|cartao|credito|debito|notinha|prazo|fiado|botijao|botijoes|bujao|bujoes|ga[sz]|unidades?|quero|preciso|manda|mandar)\\b/.test(t) ||\n    /\\bp\\d+\\b/.test(t)\n  );\n}\n\n// NOVO: se depois do endereço vier pedido junto (\"Rua A, 12, 1 botijão p45, pix\"),\n// corta o endereço antes do pedido e devolve o pedido em \"resto\".\nfunction cortarPedidoDoEndereco(texto) {\n  const original = String(texto || \"\").trim();\n  const t = normalizar(original);\n\n  if (t.length !== original.length) {\n    return { endereco: original, resto: \"\" };\n  }\n\n  const corte = t.search(\n    /\\b\\d+\\s*(?:botijao|botijoes|bujao|bujoes|ga[sz]|unidades?)\\b|\\b(?:p13|p45|pix|dinheiro|cartao|credito|debito|notinha|fiado|quero|preciso|manda|mandar)\\b/\n  );\n\n  if (corte <= 0) {\n    return { endereco: original, resto: \"\" };\n  }\n\n  return {\n    endereco: original.slice(0, corte).replace(/[\\s,;\\-]+$/, \"\").trim(),\n    resto: original.slice(corte).trim()\n  };\n}\n\n// NOVO: separa nome, endereço e pedido quando o cliente manda tudo na mesma mensagem.\n// Classifica cada linha pelo conteúdo (não pela posição):\n//   - tem \"Rua\", \"Av\", \"Travessa\"...  -> endereço\n//   - tem produto, quantidade ou pagamento -> pedido (volta em \"resto\")\n//   - só letras, sem número -> nome\n// Também aceita \"nome: João, endereço: Rua A, 12\".\n// Retorna { nome, endereco, resto } (qualquer um pode vir vazio) ou null quando\n// não achou nem nome nem endereço.\nfunction extrairNomeEEndereco(texto) {\n  const original = String(texto || \"\").trim();\n\n  if (!original) {\n    return null;\n  }\n\n  const t = normalizar(original);\n  const alinhado = t.length === original.length;\n  const temNome = /\\bnome\\b/.test(t);\n  const temEndereco = /\\bendereco\\b/.test(t);\n\n  // 0) NOVO: vários campos com rótulo na mesma mensagem, por exemplo\n  // \"quantidade 5 e endereço Rua A, 12\" ou \"endereço: dancador estrela, 197, pagamento pix\".\n  // Cada campo vai até o próximo rótulo; nome e endereço ficam separados do resto.\n  if (alinhado && (temNome || temEndereco)) {\n    const rotulos = [];\n    const regexRotulo = /\\b(nome|endereco|quantidade|qtd|produto|modelo|pagamento)\\b/g;\n    let achado;\n\n    while ((achado = regexRotulo.exec(t)) !== null) {\n      rotulos.push({ palavra: achado[1], inicio: achado.index, fim: achado.index + achado[1].length });\n    }\n\n    const temOutroCampo = rotulos.some(r => ![\"nome\", \"endereco\"].includes(r.palavra));\n\n    if (temOutroCampo) {\n      let nomeRot = \"\";\n      let enderecoRot = \"\";\n      const restoRot = [];\n\n      rotulos.forEach((r, i) => {\n        const limite = i + 1 < rotulos.length ? rotulos[i + 1].inicio : original.length;\n\n        const valor = original\n          .slice(r.fim, limite)\n          .replace(/^\\s*(?:[:\\-]|é|eh|e)?\\s*/i, \"\")\n          .replace(/^(?:o|a|do|da|de)\\s+/i, \"\")\n          .replace(/[\\s,;.\\-]+(?:e\\s+)?(?:o\\s+|a\\s+)?$/i, \"\")\n          .trim();\n\n        if (!valor) {\n          return;\n        }\n\n        if (r.palavra === \"nome\") {\n          nomeRot = valor;\n        } else if (r.palavra === \"endereco\") {\n          enderecoRot = valor;\n        } else {\n          restoRot.push(r.palavra + \" \" + valor);\n        }\n      });\n\n      if (nomeRot || enderecoRot || restoRot.length) {\n        return { nome: nomeRot, endereco: enderecoRot, resto: restoRot.join(\", \") };\n      }\n    }\n  }\n\n  // 1) Com rótulos: \"nome: João Silva, endereço: Rua A, 12\" (ou o contrário)\n  if (temNome && temEndereco) {\n    const nomeDepois = original.match(\n      /nome\\s*(?:[:\\-]|é|eh)?\\s*(.+?)[\\s,;.\\-]+(?:e\\s+)?(?:o\\s+)?endere[cç]o\\s*(?:[:\\-]|é|eh)?\\s*(.+)$/is\n    );\n\n    if (nomeDepois) {\n      return { nome: nomeDepois[1].trim(), endereco: nomeDepois[2].trim(), resto: \"\" };\n    }\n\n    const enderecoDepois = original.match(\n      /endere[cç]o\\s*(?:[:\\-]|é|eh)?\\s*(.+?)[\\s,;.\\-]+(?:e\\s+)?(?:o\\s+)?nome\\s*(?:[:\\-]|é|eh)?\\s*(.+)$/is\n    );\n\n    if (enderecoDepois) {\n      return { nome: enderecoDepois[2].trim(), endereco: enderecoDepois[1].trim(), resto: \"\" };\n    }\n\n    return null;\n  }\n\n  // 2) Citou só \"endereço\": pega a partir de onde começa a rua, se houver\n  if (temEndereco) {\n    const inicio = alinhado ? acharInicioEndereco(t) : -1;\n\n    if (inicio >= 0) {\n      const partes = cortarPedidoDoEndereco(original.slice(inicio));\n\n      // NOVO: o que vem antes do endereço (\"3 botijões, endereço Rua A\") também conta\n      const antes = original\n        .slice(0, inicio)\n        .replace(/endere[cç]o\\s*(?:[:\\-]|é|eh)?\\s*$/i, \"\")\n        .replace(/[\\s,;.\\-]+(?:e\\s+)?(?:o\\s+|a\\s+)?$/i, \"\")\n        .trim();\n\n      const restoTotal = [\n        /\\d/.test(antes) || pareceTextoDePedido(normalizar(antes)) ? antes : \"\",\n        partes.resto\n      ].filter(Boolean).join(\", \");\n\n      return { nome: \"\", endereco: partes.endereco, resto: restoTotal };\n    }\n\n    return null;\n  }\n\n  // Citou só \"nome\": deixa o fluxo normal perguntar\n  if (temNome) {\n    return null;\n  }\n\n  // 3) Linha por linha\n  const linhas = original.split(/\\r?\\n/).map(l => l.trim()).filter(Boolean);\n\n  let nomeAchado = \"\";\n  let enderecoAchado = \"\";\n  const resto = [];\n\n  for (const linha of linhas) {\n    const tl = normalizar(linha);\n    const inicio = tl.length === linha.length ? acharInicioEndereco(tl) : -1;\n\n    // Linha com endereço (pode ter o nome antes e o pedido depois)\n    if (inicio >= 0) {\n      const antes = linha.slice(0, inicio).replace(/[\\s,;\\-]+$/, \"\").trim();\n      const partes = cortarPedidoDoEndereco(linha.slice(inicio));\n\n      // O que vem antes do endereço pode ter nome e pedido (\"02 p45, João Silva\")\n      for (const pedaco of antes.split(/[,;]+/).map(p => p.trim()).filter(Boolean)) {\n        if (/\\d/.test(pedaco) || pareceTextoDePedido(normalizar(pedaco))) {\n          resto.push(pedaco);\n        } else if (!nomeAchado) {\n          nomeAchado = pedaco;\n        }\n      }\n\n      enderecoAchado = enderecoAchado\n        ? enderecoAchado + \", \" + partes.endereco\n        : partes.endereco;\n\n      if (partes.resto) {\n        resto.push(partes.resto);\n      }\n\n      continue;\n    }\n\n    // Linha de pedido: produto, quantidade ou pagamento\n    if (pareceTextoDePedido(tl)) {\n      resto.push(linha);\n      continue;\n    }\n\n    // Complemento do endereço (\"apto 45\", \"123\", \"Bloco B\")\n    if (enderecoAchado) {\n      enderecoAchado += \", \" + linha;\n      continue;\n    }\n\n    // Só letras, sem número: é o nome\n    if (\n      !nomeAchado &&\n      linhas.length >= 2 &&\n      !/\\d/.test(linha) &&\n      linha.split(/\\s+/).length <= 6\n    ) {\n      nomeAchado = linha;\n      continue;\n    }\n\n    resto.push(linha);\n  }\n\n  // Duas linhas sem \"Rua\"/\"Av\": a primeira é o nome e a segunda o endereço\n  if (\n    nomeAchado &&\n    !enderecoAchado &&\n    linhas.length === 2 &&\n    resto.length === 1 &&\n    !pareceTextoDePedido(normalizar(resto[0]))\n  ) {\n    enderecoAchado = resto[0];\n    resto.length = 0;\n  }\n\n  if (!nomeAchado && !enderecoAchado) {\n    return null;\n  }\n\n  return { nome: nomeAchado, endereco: enderecoAchado, resto: resto.join(\" \") };\n}\n\n// NOVO: menu de correção, usado nas duas perguntas de confirmação\nfunction menuCorrecao() {\n  return (\n    \"Tudo bem! O que deseja corrigir?\\n\\n\" +\n    \"1. Produto (P13 ou P45)\\n\" +\n    \"2. Quantidade\\n\" +\n    \"3. Pagamento\\n\" +\n    \"4. Nome\\n\" +\n    \"5. Endereço\\n\\n\" +\n    \"Responda com o número da opção ou informe direto a alteração, por exemplo: P45, 2 botijões ou Pix.\"\n  );\n}\n\n// CORRIGIDO: o motivo \"CORRECAO\" agora só é marcado quando a chamada\n// vem de uma correção. No pedido normal (primeira vez) fica vazio.\nfunction iniciarRecalculo(motivo = \"\") {\n  valorUnitario = 0;\n  valorTotal = 0;\n  motivoCalculo = motivo;\n  novaEtapa = \"CALCULAR_PRECO\";\n  resposta = \"\";\n}\n\nfunction irParaConfirmacao() {\n  novaEtapa = \"CONFIRMAR_PEDIDO\";\n  resposta = resumoPedido();\n}\n\n// NOVO: depois que o cliente informa nome e endereço, segue com o que ainda falta\n// do pedido (produto, quantidade, pagamento) ou vai direto ao resumo.\nfunction continuarPedido() {\n  if (!produto) {\n    novaEtapa = \"AGUARDANDO_PRODUTO\";\n    resposta =\n      quantidade && Number(quantidade) > 0\n        ? \"Você deseja botijão P13 ou P45?\"\n        : \"Você deseja botijão P13 ou P45? E quantos botijões?\";\n  } else if (!quantidade || Number(quantidade) <= 0) {\n    novaEtapa = \"AGUARDANDO_QUANTIDADE\";\n    resposta = \"Quantos botijões você deseja?\";\n  } else if (!pagamento) {\n    novaEtapa = \"AGUARDANDO_PAGAMENTO\";\n    resposta =\n      \"Como deseja realizar o pagamento? Pix, dinheiro, cartão ou notinha?\";\n  } else if (!(valorTotal > 0)) {\n    iniciarRecalculo();\n  } else {\n    irParaConfirmacao();\n  }\n}\n\n// CORRIGIDO: aplica TODOS os valores que vierem na mensagem\n// (ex.: \"P45, 2 botijões\" troca produto e quantidade) e recalcula uma vez só.\nfunction interpretarCorrecaoDireta(texto = mensagem) {\n  const textoNormalizado = normalizar(texto);\n\n  if (temModeloNaoDisponivel(textoNormalizado) && !extrairProduto(textoNormalizado)) {\n    novaEtapa = \"AGUARDANDO_CORRECAO\";\n    resposta =\n      \"Trabalhamos com botijão P13 ou P45. Qual desses modelos você deseja?\";\n    return true;\n  }\n\n  const produtoNovo = extrairProduto(textoNormalizado);\n  const pagamentoNovo = extrairPagamento(texto);\n  const quantidadeNova = extrairQuantidade(texto);\n\n  let mudou = false;\n\n  if (produtoNovo) {\n    produto = produtoNovo;\n    mudou = true;\n  }\n\n  if (pagamentoNovo) {\n    pagamento = pagamentoNovo;\n    mudou = true;\n  }\n\n  if (quantidadeNova && quantidadeNova > 0) {\n    quantidade = quantidadeNova;\n    mudou = true;\n  }\n\n  if (mudou) {\n    iniciarRecalculo(\"CORRECAO\");\n    return true;\n  }\n\n  return false;\n}\n\n// ======================================================\n// FILA DE CORREÇÃO (cliente quer corrigir 2 ou mais itens: \"quantidade e endereço\")\n// A etapa guarda o que ainda falta, ex.: \"CORRIGIR_ENDERECO>QUANTIDADE\".\n// ======================================================\n\nconst etapaBase = etapa.split(\">\")[0];\nconst filaCorrecao = etapa.includes(\">\") ? etapa.split(\">\").slice(1) : [];\n\nconst perguntasCorrecao = {\n  PRODUTO: \"Qual produto deseja: P13 ou P45?\",\n  QUANTIDADE: \"Qual é a nova quantidade desejada?\",\n  PAGAMENTO: \"Qual será a forma de pagamento: Pix, dinheiro, cartão ou notinha?\",\n  NOME: \"Certo. Informe o nome correto para este pedido.\",\n  ENDERECO: \"Certo. Informe o endereço correto para a entrega.\"\n};\n\n// monta o nome da etapa com o que ainda falta corrigir\nfunction etapaCorrecao(campo, fila) {\n  return \"CORRIGIR_\" + campo + (fila.length ? \">\" + fila.join(\">\") : \"\");\n}\n\n// o mesmo item de novo (resposta não entendida), mantendo o que falta\nfunction repetirEtapaCorrecao(campo) {\n  return etapaCorrecao(campo, filaCorrecao);\n}\n\n// se ainda falta corrigir algo, faz a próxima pergunta e devolve true\nfunction seguirFilaCorrecao() {\n  if (!filaCorrecao.length) {\n    return false;\n  }\n\n  const [proximo, ...resto] = filaCorrecao;\n  novaEtapa = etapaCorrecao(proximo, resto);\n  resposta = \"Anotado! ✅\\n\\n\" + perguntasCorrecao[proximo];\n  return true;\n}\n\n// descobre quais itens o cliente citou pelo nome (\"quantidade e endereço\")\nfunction camposCitados(t) {\n  const regras = [\n    [\"PRODUTO\", /\\b(produto|modelo)\\b/],\n    [\"QUANTIDADE\", /\\b(quantidade|qtd|unidades|botijoes)\\b/],\n    [\"PAGAMENTO\", /\\b(pagamento|pagar|forma)\\b/],\n    [\"NOME\", /\\b(nome|cliente)\\b/],\n    [\"ENDERECO\", /\\b(endereco|entrega|local)\\b/]\n  ];\n\n  return regras\n    .map(([campo, regex]) => ({ campo, pos: t.search(regex) }))\n    .filter(c => c.pos >= 0)\n    .sort((a, b) => a.pos - b.pos)\n    .map(c => c.campo);\n}\n\n// nome e endereço primeiro; o que muda o preço (produto, quantidade, pagamento) por último,\n// assim o recálculo acontece uma vez só, no fim.\nfunction ordenarCampos(campos) {\n  const semPreco = campos.filter(c => c === \"NOME\" || c === \"ENDERECO\");\n  const comPreco = campos.filter(c => !(c === \"NOME\" || c === \"ENDERECO\"));\n  return [...semPreco, ...comPreco];\n}\n\n// ======================================================\n// 1. AGUARDANDO PRODUTO\n// ======================================================\n\n// NOVO: desistência durante as perguntas do pedido (inclusive o SIM por engano\n// em \"Deseja mais alguma coisa?\") encerra o atendimento.\nif (\n  [\"AGUARDANDO_PRODUTO\", \"AGUARDANDO_QUANTIDADE\", \"AGUARDANDO_PAGAMENTO\"].includes(etapa) &&\n  cancelouAtendimento(mensagem)\n) {\n  novaEtapa = \"FINALIZADO\";\n  resposta =\n    \"Tudo bem, sem problema! 😊\\n\\n\" +\n    \"Atendimento encerrado. Se precisar de gás, é só chamar.\\n\\n\" +\n    \"A Distribuidora Exemplo está sempre à sua disposição!\";\n}\n\nelse if (etapa === \"AGUARDANDO_PRODUTO\") {\n  const produtoNovo = extrairProdutoPerguntado(mensagemNormalizada);\n  const quantidadeNova = extrairQuantidade(mensagem);\n  const pagamentoNovo = extrairPagamento(mensagem);\n\n  if (produtoNovo) {\n    produto = produtoNovo;\n\n    if (quantidadeNova && quantidadeNova > 0) {\n      quantidade = quantidadeNova;\n    }\n\n    if (pagamentoNovo) {\n      pagamento = pagamentoNovo;\n    }\n\n    if (!quantidade || Number(quantidade) <= 0) {\n      novaEtapa = \"AGUARDANDO_QUANTIDADE\";\n      resposta = \"Quantos botijões você deseja?\";\n    } else if (!pagamento) {\n      novaEtapa = \"AGUARDANDO_PAGAMENTO\";\n      resposta =\n        \"Como deseja realizar o pagamento? Pix, dinheiro, cartão ou notinha?\";\n    } else {\n      iniciarRecalculo();\n    }\n  } else if (temModeloNaoDisponivel(mensagemNormalizada)) {\n    novaEtapa = \"AGUARDANDO_PRODUTO\";\n    resposta =\n      \"Esse modelo não está disponível. Trabalhamos com botijão P13 ou P45. Qual você deseja?\";\n  } else {\n    const pagamentoNovoDireto = extrairPagamento(mensagem);\n    const quantidadeNovaDireta = extrairQuantidade(mensagem);\n\n    if (pagamentoNovoDireto) {\n      pagamento = pagamentoNovoDireto;\n    }\n\n    if (quantidadeNovaDireta && quantidadeNovaDireta > 0) {\n      quantidade = quantidadeNovaDireta;\n    }\n\n    novaEtapa = \"AGUARDANDO_PRODUTO\";\n\n    // CORRIGIDO: pergunta só o que ainda falta\n    if (quantidade && Number(quantidade) > 0) {\n      resposta = \"Você deseja botijão P13 ou P45?\";\n    } else {\n      resposta = \"Você deseja botijão P13 ou P45? E quantos botijões?\";\n    }\n  }\n}\n\n// ======================================================\n// 2. AGUARDANDO QUANTIDADE\n// ======================================================\n\nelse if (etapa === \"AGUARDANDO_QUANTIDADE\") {\n  const quantidadeNova = extrairQuantidade(mensagem);\n  const produtoNovo = extrairProduto(mensagemNormalizada);\n  const pagamentoNovo = extrairPagamento(mensagem);\n\n  if (produtoNovo) {\n    produto = produtoNovo;\n  }\n\n  if (pagamentoNovo) {\n    pagamento = pagamentoNovo;\n  }\n\n  if (quantidadeNova && quantidadeNova > 0) {\n    quantidade = quantidadeNova;\n\n    if (!produto) {\n      novaEtapa = \"AGUARDANDO_PRODUTO\";\n      resposta = \"Você deseja botijão P13 ou P45?\";\n    } else if (!pagamento) {\n      novaEtapa = \"AGUARDANDO_PAGAMENTO\";\n      resposta =\n        \"Como deseja realizar o pagamento? Pix, dinheiro, cartão ou notinha?\";\n    } else {\n      iniciarRecalculo();\n    }\n  } else if (temModeloNaoDisponivel(mensagemNormalizada)) {\n    novaEtapa = \"AGUARDANDO_PRODUTO\";\n    resposta =\n      \"Trabalhamos com botijão P13 ou P45. Qual modelo você deseja?\";\n  } else {\n    novaEtapa = \"AGUARDANDO_QUANTIDADE\";\n    resposta =\n      \"Informe quantos botijões você deseja. Exemplo: 1, 2 ou 3.\";\n  }\n}\n\n// ======================================================\n// 3. AGUARDANDO PAGAMENTO\n// ======================================================\n\nelse if (etapa === \"AGUARDANDO_PAGAMENTO\") {\n  const pagamentoNovo = extrairPagamento(mensagem);\n\n  if (!pagamentoNovo) {\n    novaEtapa = \"AGUARDANDO_PAGAMENTO\";\n    resposta =\n      \"Não identifiquei a forma de pagamento. Informe: Pix, dinheiro, cartão ou notinha.\";\n  } else {\n    pagamento = pagamentoNovo;\n    iniciarRecalculo();\n  }\n}\n\n// ======================================================\n// 4. AGUARDANDO NOME\n// ======================================================\n\nelse if (etapa === \"AGUARDANDO_NOME\") {\n  const nomeEEndereco = extrairNomeEEndereco(mensagem);\n\n  if (!mensagem) {\n    novaEtapa = \"AGUARDANDO_NOME\";\n    resposta = \"Por favor, informe seu nome.\";\n  } else if (nomeEEndereco && nomeEEndereco.nome && nomeEEndereco.endereco) {\n    // NOVO: cliente mandou nome e endereço juntos\n    nome = nomeEEndereco.nome;\n    endereco = nomeEEndereco.endereco;\n    continuarPedido();\n  } else if (parecePedido && mensagem.length < 35) {\n    novaEtapa = \"AGUARDANDO_NOME\";\n    resposta =\n      \"Seu pedido já está anotado. Para continuar, informe apenas seu nome.\";\n  } else {\n    nome = mensagem;\n    novaEtapa = \"AGUARDANDO_ENDERECO\";\n    resposta = \"Obrigado, \" + nome + \"! Qual é o endereço para entrega?\";\n  }\n}\n\n// ======================================================\n// 5. AGUARDANDO ENDEREÇO\n// ======================================================\n\nelse if (etapa === \"AGUARDANDO_ENDERECO\") {\n  if (!mensagem) {\n    novaEtapa = \"AGUARDANDO_ENDERECO\";\n    resposta = \"Por favor, informe o endereço completo para entrega.\";\n  } else {\n    endereco = mensagem;\n    continuarPedido();\n  }\n}\n\n// ======================================================\n// 6. CONFIRMAR DADOS ANTERIORES\n// ======================================================\n\nelse if (etapa === \"CONFIRMAR_DADOS\") {\n  const respostaCliente = interpretarSimNao(mensagem) || mensagemNormalizada.toUpperCase();\n\n  if (respostaCliente === \"SIM\" || respostaCliente === \"S\") {\n    irParaConfirmacao();\n  } else if (respostaCliente === \"NAO\" || respostaCliente === \"N\") {\n    // CORRIGIDO: NÃO abre o menu e permite corrigir tudo, não só nome e endereço\n    novaEtapa = \"AGUARDANDO_CORRECAO\";\n    resposta = menuCorrecao();\n  } else {\n    novaEtapa = \"CONFIRMAR_DADOS\";\n    resposta =\n      \"Encontrei seus dados anteriores:\\n\\n\" +\n      \"Nome: \" + nome + \"\\n\" +\n      \"Endereço: \" + endereco + \"\\n\\n\" +\n      \"Posso usar esses dados para esta entrega? Responda SIM ou NÃO.\";\n  }\n}\n\n// ======================================================\n// 7. CONFIRMAR PEDIDO\n// ======================================================\n\nelse if (etapa === \"CONFIRMAR_PEDIDO\") {\n  const respostaCliente = interpretarSimNao(mensagem) || mensagemNormalizada.toUpperCase();\n\n  if (respostaCliente === \"SIM\" || respostaCliente === \"S\") {\n    if (pagamento === \"PIX\") {\n      novaEtapa = \"AGUARDANDO_COMPROVANTE_PIX\";\n      resposta = chavePix\n        ? \"Pedido confirmado! Faça o Pix de R$ \" + formatarValor(valorTotal) +\n          \" para a chave \" + chavePix + \" e envie o comprovante por aqui.\"\n        : \"Pedido confirmado! Agora envie o comprovante do Pix por aqui.\";\n    } else if (pagamento === \"DINHEIRO\") {\n      // NOVO: pagamento em dinheiro -> pergunta se precisa de troco\n      troco = \"\";\n      novaEtapa = \"AGUARDANDO_TROCO\";\n      resposta = \"Vai precisar de troco? 💵\\n\\nSe sim, me diga para quanto (ex.: 50 ou 100). Se não, responda NÃO.\";\n    } else {\n      novaEtapa = \"CRIAR_PEDIDO\";\n      resposta = \"Pedido confirmado! Seu pedido será encaminhado para entrega.\";\n    }\n\n    // Se a forma de pagamento não é dinheiro, limpa qualquer troco antigo\n    if (pagamento !== \"DINHEIRO\") {\n      troco = \"\";\n    }\n  } else if (respostaCliente === \"NAO\" || respostaCliente === \"N\") {\n    novaEtapa = \"AGUARDANDO_CORRECAO\";\n    resposta = menuCorrecao();\n  } else {\n    novaEtapa = \"CONFIRMAR_PEDIDO\";\n    resposta = \"Por favor, responda SIM para confirmar ou NÃO para corrigir.\";\n  }\n}\n\n// ======================================================\n// 7B. AGUARDANDO TROCO (novo)\n// ======================================================\n\nelse if (etapa === \"AGUARDANDO_TROCO\") {\n  const valorNota = extrairValorTroco(mensagem);\n\n  if (disseSemTroco(mensagem)) {\n    troco = \"\";\n    novaEtapa = \"CRIAR_PEDIDO\";\n    resposta = resumoFinalPedido();\n  } else if (valorNota !== null && valorNota > 0) {\n    if (valorNota < valorTotal) {\n      novaEtapa = \"AGUARDANDO_TROCO\";\n      resposta =\n        \"O valor do pedido é R$ \" + formatarValor(valorTotal) +\n        \". Troco para quanto? (precisa ser um valor maior que esse)\";\n    } else if (valorNota === valorTotal) {\n      troco = \"\";\n      novaEtapa = \"CRIAR_PEDIDO\";\n      resposta = resumoFinalPedido();\n    } else {\n      troco = valorNota;\n      novaEtapa = \"CRIAR_PEDIDO\";\n      resposta = resumoFinalPedido();\n    }\n  } else if (interpretarSimNao(mensagem) === \"SIM\") {\n    novaEtapa = \"AGUARDANDO_TROCO\";\n    resposta = \"Troco para quanto? Ex.: 50 ou 100.\";\n  } else {\n    novaEtapa = \"AGUARDANDO_TROCO\";\n    resposta = \"Não entendi. Vai precisar de troco? Diga o valor (ex.: 50 ou 100) ou responda NÃO.\";\n  }\n}\n\n// ======================================================\n// 8. ESCOLHER O QUE CORRIGIR\n// ======================================================\n\nelse if (etapa === \"AGUARDANDO_CORRECAO\") {\n  const t = mensagemNormalizada;\n\n  // CORRIGIDO: 1) número do menu; 2) nome/endereço; 3) valores informados\n  // direto na mensagem; 4) só então as palavras soltas (produto, quantidade, pagamento).\n  const opcaoMenu = t.match(/^([1-5])\\s*[.)\\-]?$/);\n\n  // NOVO: vários números do menu (\"2 e 5\", \"2, 5\") ou vários nomes (\"quantidade e endereço\")\n  const numerosMenu = /^[1-5](?:\\s*(?:,|e|\\+|&|\\s)\\s*[1-5])+\\s*[.)]?$/.test(t)\n    ? t.match(/[1-5]/g)\n    : null;\n  const nomesPorOpcao = { 1: \"PRODUTO\", 2: \"QUANTIDADE\", 3: \"PAGAMENTO\", 4: \"NOME\", 5: \"ENDERECO\" };\n\n  let camposVarios = numerosMenu\n    ? [...new Set(numerosMenu.map(n => nomesPorOpcao[n]))]\n    : [];\n\n  if (!camposVarios.length) {\n    const semValores = !extrairProduto(t) && !extrairPagamento(mensagem) && !extrairQuantidade(mensagem);\n    const citados = semValores ? camposCitados(t) : [];\n\n    if (citados.length >= 2) {\n      camposVarios = citados;\n    }\n  }\n\n  // NOVO: nome e/ou endereço enviados na mesma mensagem. Vem antes da leitura\n  // de quantidade, para o número da casa não virar quantidade de botijões.\n  const nomeEEndereco = extrairNomeEEndereco(mensagem);\n\n  if (camposVarios.length >= 2) {\n    const ordem = ordenarCampos(camposVarios);\n    const [primeiro, ...resto] = ordem;\n\n    novaEtapa = etapaCorrecao(primeiro, resto);\n    resposta =\n      \"Certo! Vamos corrigir um de cada vez. 😊\\n\\n\" + perguntasCorrecao[primeiro];\n  } else if (opcaoMenu) {\n    const opcao = opcaoMenu[1];\n\n    if (opcao === \"1\") {\n      novaEtapa = \"CORRIGIR_PRODUTO\";\n      resposta = \"Qual produto deseja: P13 ou P45?\";\n    } else if (opcao === \"2\") {\n      novaEtapa = \"CORRIGIR_QUANTIDADE\";\n      resposta = \"Qual é a nova quantidade desejada?\";\n    } else if (opcao === \"3\") {\n      novaEtapa = \"CORRIGIR_PAGAMENTO\";\n      resposta = \"Qual será a forma de pagamento: Pix, dinheiro, cartão ou notinha?\";\n    } else if (opcao === \"4\") {\n      novaEtapa = \"CORRIGIR_NOME\";\n      resposta = \"Certo. Informe o nome correto para este pedido.\";\n    } else {\n      novaEtapa = \"CORRIGIR_ENDERECO\";\n      resposta = \"Certo. Informe o endereço correto para a entrega.\";\n    }\n  } else if (nomeEEndereco) {\n    if (nomeEEndereco.nome) {\n      nome = nomeEEndereco.nome;\n    }\n\n    if (nomeEEndereco.endereco) {\n      endereco = nomeEEndereco.endereco;\n    }\n\n    // Se veio produto, quantidade ou pagamento junto, recalcula o preço\n    // (nome e endereço já ficam guardados). Senão, volta direto ao resumo.\n    if (!(nomeEEndereco.resto && interpretarCorrecaoDireta(nomeEEndereco.resto))) {\n      irParaConfirmacao();\n    }\n  } else if (/\\b(nome|cliente)\\b/.test(t)) {\n    novaEtapa = \"CORRIGIR_NOME\";\n    resposta = \"Certo. Informe o nome correto para este pedido.\";\n  } else if (/\\b(endereco|entrega|local)\\b/.test(t)) {\n    novaEtapa = \"CORRIGIR_ENDERECO\";\n    resposta = \"Certo. Informe o endereço correto para a entrega.\";\n  } else if (interpretarCorrecaoDireta()) {\n    // A alteração foi identificada diretamente na mensagem.\n  } else if (/\\b(produto|modelo|ga[sz]|botijao|bujao)\\b/.test(t)) {\n    novaEtapa = \"CORRIGIR_PRODUTO\";\n    resposta = \"Qual produto deseja: P13 ou P45?\";\n  } else if (/\\b(quantidade|qtd|unidades|botijoes)\\b/.test(t)) {\n    novaEtapa = \"CORRIGIR_QUANTIDADE\";\n    resposta = \"Qual é a nova quantidade desejada?\";\n  } else if (/\\b(pagamento|pagar|forma)\\b/.test(t)) {\n    novaEtapa = \"CORRIGIR_PAGAMENTO\";\n    resposta = \"Qual será a forma de pagamento: Pix, dinheiro, cartão ou notinha?\";\n  } else {\n    novaEtapa = \"AGUARDANDO_CORRECAO\";\n    resposta =\n      \"O que deseja corrigir: produto, quantidade, pagamento, nome ou endereço? Você também pode informar diretamente o novo valor.\";\n  }\n}\n\n// ======================================================\n// 9. CORRIGIR PRODUTO\n// ======================================================\n\nelse if (etapaBase === \"CORRIGIR_PRODUTO\") {\n  const produtoNovo = extrairProdutoPerguntado(mensagemNormalizada);\n\n  if (produtoNovo) {\n    produto = produtoNovo;\n\n    if (!seguirFilaCorrecao()) {\n      iniciarRecalculo(\"CORRECAO\");\n    }\n  } else {\n    novaEtapa = repetirEtapaCorrecao(\"PRODUTO\");\n    resposta =\n      \"Não identifiquei o modelo. Informe P13 ou P45.\";\n  }\n}\n\n// ======================================================\n// 10. CORRIGIR QUANTIDADE\n// ======================================================\n\nelse if (etapaBase === \"CORRIGIR_QUANTIDADE\") {\n  const quantidadeNova = extrairQuantidade(mensagem);\n\n  if (quantidadeNova && quantidadeNova > 0) {\n    quantidade = quantidadeNova;\n\n    if (!seguirFilaCorrecao()) {\n      iniciarRecalculo(\"CORRECAO\");\n    }\n  } else {\n    novaEtapa = repetirEtapaCorrecao(\"QUANTIDADE\");\n    resposta = \"Informe uma quantidade válida, como 1, 2 ou 3.\";\n  }\n}\n\n// ======================================================\n// 11. CORRIGIR PAGAMENTO\n// ======================================================\n\nelse if (etapaBase === \"CORRIGIR_PAGAMENTO\") {\n  const pagamentoNovo = extrairPagamento(mensagem);\n\n  if (pagamentoNovo) {\n    pagamento = pagamentoNovo;\n\n    if (!seguirFilaCorrecao()) {\n      iniciarRecalculo(\"CORRECAO\");\n    }\n  } else {\n    novaEtapa = repetirEtapaCorrecao(\"PAGAMENTO\");\n    resposta =\n      \"Não identifiquei a forma de pagamento. Escolha Pix, dinheiro, cartão ou notinha.\";\n  }\n}\n\n// ======================================================\n// 12. CORRIGIR NOME\n// ======================================================\n\nelse if (etapaBase === \"CORRIGIR_NOME\") {\n  if (!mensagem) {\n    novaEtapa = repetirEtapaCorrecao(\"NOME\");\n    resposta = \"Informe o nome correto, por favor.\";\n  } else {\n    const nomeEEndereco = extrairNomeEEndereco(mensagem);\n\n    if (nomeEEndereco && nomeEEndereco.nome && nomeEEndereco.endereco) {\n      nome = nomeEEndereco.nome;\n      endereco = nomeEEndereco.endereco;\n    } else {\n      nome = mensagem;\n    }\n\n    if (!seguirFilaCorrecao()) {\n      irParaConfirmacao();\n    }\n  }\n}\n\n// ======================================================\n// 13. CORRIGIR ENDEREÇO\n// ======================================================\n\nelse if (etapaBase === \"CORRIGIR_ENDERECO\") {\n  if (!mensagem) {\n    novaEtapa = repetirEtapaCorrecao(\"ENDERECO\");\n    resposta = \"Informe o endereço correto para a entrega.\";\n  } else {\n    const nomeEEndereco = extrairNomeEEndereco(mensagem);\n\n    if (nomeEEndereco && nomeEEndereco.nome && nomeEEndereco.endereco) {\n      nome = nomeEEndereco.nome;\n      endereco = nomeEEndereco.endereco;\n    } else {\n      endereco = mensagem;\n    }\n\n    if (!seguirFilaCorrecao()) {\n      irParaConfirmacao();\n    }\n  }\n}\n\n// ======================================================\n// 14. AGUARDANDO COMPROVANTE PIX\n// ======================================================\n\nelse if (etapa === \"AGUARDANDO_COMPROVANTE_PIX\") {\n  if (comprovanteRecebido) {\n    novaEtapa = \"CRIAR_PEDIDO\";\n    resposta =\n      \"Comprovante recebido! Seu pedido será encaminhado para conferência e entrega.\";\n  } else {\n    novaEtapa = \"AGUARDANDO_COMPROVANTE_PIX\";\n    resposta =\n      \"Ainda estou aguardando o comprovante do Pix\" +\n      (chavePix ? \" (chave: \" + chavePix + \")\" : \"\") +\n      \". Envie a imagem ou o PDF por aqui.\";\n  }\n}\n\n// ======================================================\n// 15. CRIAR PEDIDO\n// ======================================================\n\nelse if (etapa === \"CRIAR_PEDIDO\") {\n  resposta = \"Seu pedido já está sendo processado.\";\n}\n\n// ======================================================\n// 16. PERGUNTAR SE DESEJA ALGO MAIS\n// ======================================================\n\nelse if (etapa === \"PERGUNTAR_ALGO_MAIS\") {\n  const respostaCliente = interpretarSimNao(mensagem) || mensagemNormalizada.toUpperCase();\n\n  // NOVO: \"mais nada\", \"só isso\" também encerram\n  const disseNao =\n    respostaCliente === \"NAO\" ||\n    respostaCliente === \"N\" ||\n    /\\b(nada|so isso|apenas isso|por hoje)\\b/.test(mensagemNormalizada);\n\n  // NOVO: o cliente já pode responder pedindo (\"quero outro gás normal\", \"mais um de cozinha\")\n  const querOutro =\n    !disseNao &&\n    (respostaCliente === \"SIM\" ||\n      respostaCliente === \"S\" ||\n      extrairProdutoPerguntado(mensagemNormalizada) !== null ||\n      /\\b(outro|outra|mais um|mais uma|mais \\d+|quero|preciso|manda|mandar|botijao|botijoes|bujao|ga[sz])\\b/.test(mensagemNormalizada));\n\n  if (disseNao) {\n    novaEtapa = \"FINALIZADO\";\n    resposta =\n      \"Muito obrigado pela preferência! 😊\\n\\n\" +\n      \"Seu pedido será entregue de 20 a 40 minutos! 😊\\n\\n\" +\n      \"A Distribuidora Exemplo está sempre à sua disposição.\\n\\n\" +\n      \"Até a próxima!\";\n  } else if (querOutro) {\n    const atendimentoAnteriorFinalizado = {\n      row_number: atendimento.row_number,\n      telefone: atendimento.Telefone,\n      etapa: \"FINALIZADO\",\n      produto,\n      quantidade,\n      pagamento,\n      nome,\n      endereco,\n      valor_unitario: valorUnitario,\n      valor_total: valorTotal,\n      troco,\n      comprovante_recebido: comprovanteRecebido,\n      id_atendimento: atendimento.IDAtendimento,\n      novo_atendimento: false,\n      resposta: \"\"\n    };\n\n    prepararNovoPedido(mensagem, false);\n\n    novoAtendimento = true;\n    idAtendimentoFinal = gerarIdAtendimento();\n    rowNumberFinal = \"\";\n\n    const novoAtendimentoItem = {\n      row_number: rowNumberFinal,\n      telefone: atendimento.Telefone,\n      etapa: novaEtapa,\n      produto,\n      quantidade,\n      pagamento,\n      nome,\n      endereco,\n      valor_unitario: valorUnitario,\n      valor_total: valorTotal,\n      troco: \"\",\n      comprovante_recebido: false,\n      id_atendimento: idAtendimentoFinal,\n      novo_atendimento: true,\n      resposta\n    };\n\n    marcarConversa(atendimento.Telefone, true);\n\n    return [\n      { json: atendimentoAnteriorFinalizado },\n      { json: novoAtendimentoItem }\n    ];\n  } else {\n    novaEtapa = \"PERGUNTAR_ALGO_MAIS\";\n    resposta = \"Deseja mais alguma coisa? Responda SIM ou NÃO.\";\n  }\n}\n\n// ======================================================\n// 17. CALCULAR PREÇO\n// ======================================================\n\nelse if (etapa === \"CALCULAR_PRECO\") {\n  resposta = \"Estou calculando o valor do seu pedido.\";\n}\n\n// ======================================================\n// 18. FINALIZADO\n// ======================================================\n\nelse if (etapa === \"FINALIZADO\") {\n  if (parecePedido) {\n    prepararNovoPedido(mensagem);\n\n    novoAtendimento = true;\n    idAtendimentoFinal = gerarIdAtendimento();\n    rowNumberFinal = \"\";\n  } else {\n    resposta =\n      \"Este atendimento já foi finalizado. Se precisar de um novo pedido, é só me chamar. 😊\";\n  }\n}\n\n// ======================================================\n// ETAPA DESCONHECIDA\n// ======================================================\n\nelse {\n  novaEtapa = etapa;\n  resposta = \"Não consegui identificar a etapa atual do atendimento: \" + etapa;\n}\n\n// ======================================================\n// RETORNO\n// ======================================================\n\n// NOVO: em áudio, quando o bot repete a pergunta, mostra o que entendeu.\n// Ajuda o cliente e deixa claro quando a transcrição errou a palavra.\nmarcarConversa(atendimento.Telefone, novaEtapa !== \"FINALIZADO\");\n\nconst veioDeAudio = editFields1.tipo_mensagem === \"audioMessage\";\nconst etapasComPergunta = [\n  \"AGUARDANDO_PRODUTO\",\n  \"AGUARDANDO_QUANTIDADE\",\n  \"AGUARDANDO_PAGAMENTO\",\n  \"CONFIRMAR_DADOS\",\n  \"CONFIRMAR_PEDIDO\",\n  \"AGUARDANDO_TROCO\",\n  \"AGUARDANDO_CORRECAO\"\n];\n\nif (veioDeAudio && mensagem && resposta && novaEtapa === etapa && etapasComPergunta.includes(etapa)) {\n  resposta = 'Entendi: \"' + mensagem + '\"\\n\\n' + resposta;\n}\n\nreturn [{\n  json: {\n    row_number: rowNumberFinal,\n    telefone: atendimento.Telefone,\n    etapa: novaEtapa,\n    produto,\n    quantidade,\n    pagamento,\n    nome,\n    endereco,\n    valor_unitario: valorUnitario,\n    valor_total: valorTotal,\n    troco,\n    comprovante_recebido: comprovanteRecebido,\n    id_atendimento: idAtendimentoFinal,\n    novo_atendimento: novoAtendimento,\n    motivo_calculo: motivoCalculo,\n    resposta\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2320,
+        -272
+      ],
+      "id": "51635f30-9e80-4bea-9cac-981e7af6b49c",
+      "name": "Processar etapa Atendimento"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 451256105,
+          "mode": "list",
+          "cachedResultName": "Atendimentos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Produto": "={{ $json.produto }}",
+            "Quantidade": "={{ $json.quantidade }}",
+            "Nome": "={{ $json.nome }}",
+            "Endereco": "={{ $json.endereco }}",
+            "Telefone": "={{ $json.telefone || $json.Telefone }}",
+            "Etapa": "={{ $json.etapa }}",
+            "Pagamento": "={{ $json.pagamento }}",
+            "ValorUnitario": "={{ $json.valor_unitario }}",
+            "ValorTotal": "={{ $json.valor_total }}",
+            "UltimaAtualizacao": "={{ $now }}",
+            "IDAtendimento": "={{ $json.id_atendimento }}",
+            "row_number": "={{ $json.row_number }}",
+            "Troco": "={{ $json.troco }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Telefone",
+              "displayName": "Telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Etapa",
+              "displayName": "Etapa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Produto",
+              "displayName": "Produto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Quantidade",
+              "displayName": "Quantidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pagamento",
+              "displayName": "Pagamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nome",
+              "displayName": "Nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Endereco",
+              "displayName": "Endereco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "UltimaAtualizacao",
+              "displayName": "UltimaAtualizacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorUnitario",
+              "displayName": "ValorUnitario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorTotal",
+              "displayName": "ValorTotal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IDAtendimento",
+              "displayName": "IDAtendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Troco",
+              "displayName": "Troco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1920,
+        -272
+      ],
+      "id": "cef95eec-0674-4a76-8eef-f6a02ef77045",
+      "name": "Atualizar Atendimento",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b38db472-aa01-4632-a02c-70817f1257a1",
+              "leftValue": "={{ $('Processar etapa Atendimento').first().json.etapa }}",
+              "rightValue": "CALCULAR_PRECO",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1728,
+        -272
+      ],
+      "id": "117ef62c-2509-4af3-93a4-99374742dd5d",
+      "name": "Precisa Calcular Preço"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 891422788,
+          "mode": "list",
+          "cachedResultName": "Produtos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Código",
+              "lookupValue": "={{ $('Processar etapa Atendimento').first().json.produto }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1568,
+        -512
+      ],
+      "id": "57f3cc04-0402-4f15-ae4c-3833e1a325e6",
+      "name": "Buscar preço do produto",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 451256105,
+          "mode": "list",
+          "cachedResultName": "Atendimentos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "Telefone": "={{ $json.telefone }}",
+            "Etapa": "={{ $json.etapa }}",
+            "Produto": "={{ $json.produto }}",
+            "Quantidade": "={{ $json.quantidade }}",
+            "Pagamento": "={{ $json.pagamento }}",
+            "Nome": "={{ $json.nome }}",
+            "Endereco": "={{ $json.endereco }}",
+            "UltimaAtualizacao": "={{ $now }}",
+            "ValorUnitario": "={{ $json.valor_unitario }}",
+            "ValorTotal": "={{ $json.valor_total }}",
+            "IDAtendimento": "={{ $json.id_atendimento }}",
+            "Troco": "={{ $('Processar etapa Atendimento').item.json.troco }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Telefone",
+              "displayName": "Telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Etapa",
+              "displayName": "Etapa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Produto",
+              "displayName": "Produto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Quantidade",
+              "displayName": "Quantidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pagamento",
+              "displayName": "Pagamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nome",
+              "displayName": "Nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Endereco",
+              "displayName": "Endereco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "UltimaAtualizacao",
+              "displayName": "UltimaAtualizacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorUnitario",
+              "displayName": "ValorUnitario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorTotal",
+              "displayName": "ValorTotal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IDAtendimento",
+              "displayName": "IDAtendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Troco",
+              "displayName": "Troco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1072,
+        -512
+      ],
+      "id": "d8644cf6-70cc-4757-9127-a9fd6bbdd40e",
+      "name": "Atualizar Preço Atendimento",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0621f790-8259-4004-ac48-31b2b3eddd68",
+              "leftValue": "={{ String($json.Etapa || '').trim() }}",
+              "rightValue": "CRIAR_PEDIDO",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1536,
+        -256
+      ],
+      "id": "d797a755-2a25-4791-a0b1-c576cdaece86",
+      "name": "Deve criar Pedido?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Processar etapa Atendimento').item.json;\n\nconst agora = new Date();\n\nconst data = agora.toLocaleDateString('pt-BR');\n\nconst hora = agora.toLocaleTimeString('pt-BR', {\n  hour: '2-digit',\n  minute: '2-digit'\n});\n\nconst quantidade = Number(d.quantidade || 1);\n\nconst pedido =\n  \"PED-\" +\n  agora.getFullYear().toString() +\n  String(agora.getMonth() + 1).padStart(2, \"0\") +\n  String(agora.getDate()).padStart(2, \"0\") +\n  \"-\" +\n  String(agora.getTime()).slice(-6);\n\nreturn [{\n  json: {\n    Pedido: pedido,\n    Data: data,\n    Hora: hora,\n    Telefone: d.telefone || \"\",\n    Cliente: d.nome || \"\",\n    Produto: d.produto || \"\",\n    Quantidade: quantidade,\n    Valor: d.valor_total ?? \"\",\n    Pagamento: d.pagamento || \"\",\n    Status: \"RECEBIDO\",\n    IDAtendimento: d.id_atendimento,\n    Comprovante: d.comprovante_recebido ? \"SIM\" : \"NÃO\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1376,
+        -272
+      ],
+      "id": "a21c9389-9888-4190-bbac-07c4973b2d25",
+      "name": "Preparar Pedido"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 94997062,
+          "mode": "list",
+          "cachedResultName": "Pedidos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "IDAtendimento",
+              "lookupValue": "={{ $json.IDAtendimento }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1200,
+        -272
+      ],
+      "id": "c7dc7629-8aa3-4bc9-9624-acd59d313ab3",
+      "name": "Buscar Pedido Existente",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "39118312-448e-43e8-8586-a9e1ee5fc4ad",
+              "leftValue": "={{ String($json.IDAtendimento || '').trim() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1024,
+        -272
+      ],
+      "id": "860a2671-92a4-4b53-9310-649d6a5da2dc",
+      "name": "Pedido já existe?",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 94997062,
+          "mode": "list",
+          "cachedResultName": "Pedidos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Pedido": "={{ $('Preparar Pedido').first().json.Pedido }}",
+            "Data": "={{ $('Preparar Pedido').first().json.Data }}",
+            "Hora": "={{ $('Preparar Pedido').first().json.Hora }}",
+            "Telefone": "={{ $('Preparar Pedido').first().json.Telefone }}",
+            "Cliente": "={{ $('Preparar Pedido').first().json.Cliente }}",
+            "Produto": "={{ $('Preparar Pedido').first().json.Produto }}",
+            "Quantidade": "={{ $('Preparar Pedido').first().json.Quantidade }}",
+            "Valor": "={{ $('Preparar Pedido').first().json.Valor }}",
+            "Pagamento": "={{ $('Preparar Pedido').first().json.Pagamento }}",
+            "Status": "={{ $('Preparar Pedido').first().json.Status }}",
+            "Comprovante": "={{ $('Preparar Pedido').first().json.Comprovante }}",
+            "IDAtendimento": "={{ $('Preparar Pedido').first().json.IDAtendimento }}",
+            "Troco": "={{ $('Processar etapa Atendimento').item.json.troco }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Pedido",
+              "displayName": "Pedido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Data",
+              "displayName": "Data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hora",
+              "displayName": "Hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Telefone",
+              "displayName": "Telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Cliente",
+              "displayName": "Cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Produto",
+              "displayName": "Produto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Quantidade",
+              "displayName": "Quantidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Valor",
+              "displayName": "Valor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pagamento",
+              "displayName": "Pagamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Comprovante",
+              "displayName": "Comprovante",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IDAtendimento",
+              "displayName": "IDAtendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Troco",
+              "displayName": "Troco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -832,
+        -272
+      ],
+      "id": "1997d425-be54-4c80-b533-6b0c2a322f47",
+      "name": "Criar Pedido",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 451256105,
+          "mode": "list",
+          "cachedResultName": "Atendimentos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Etapa": "PERGUNTAR_ALGO_MAIS",
+            "IDAtendimento": "={{ $json.IDAtendimento }}",
+            "row_number": "={{ $('Processar etapa Atendimento').first().json.row_number }}",
+            "Troco": "={{ $('Processar etapa Atendimento').item.json.troco }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Telefone",
+              "displayName": "Telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Etapa",
+              "displayName": "Etapa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Produto",
+              "displayName": "Produto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Quantidade",
+              "displayName": "Quantidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pagamento",
+              "displayName": "Pagamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nome",
+              "displayName": "Nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Endereco",
+              "displayName": "Endereco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "UltimaAtualizacao",
+              "displayName": "UltimaAtualizacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorUnitario",
+              "displayName": "ValorUnitario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorTotal",
+              "displayName": "ValorTotal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IDAtendimento",
+              "displayName": "IDAtendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Troco",
+              "displayName": "Troco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -640,
+        -272
+      ],
+      "id": "b999d0c2-7830-4af0-a083-15629a5a6b99",
+      "name": "Finalizar Atendimento Pedido",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/message/sendText/GasBot",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "COLE_AQUI_A_CHAVE_DA_EVOLUTION"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Whatsapp').first().json.body.data.key.remoteJidAlt\n      ? $('Whatsapp').first().json.body.data.key.remoteJidAlt.replace('@s.whatsapp.net', '')\n      : $('Whatsapp').first().json.body.sender.replace('@s.whatsapp.net', ''), text: $('Processar etapa Atendimento').item.json.resposta + \"\\n\\nDeseja mais alguma coisa? Responda SIM ou NÃO.\" }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -448,
+        -272
+      ],
+      "id": "9ee515a0-55f1-4794-99c2-402ab8833469",
+      "name": "Enviar Pedido Atendido",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/message/sendText/GasBot",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "COLE_AQUI_A_CHAVE_DA_EVOLUTION"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: $('Whatsapp').first().json.body.data.key.remoteJid.replace('@s.whatsapp.net', ''),\n    text: $('Processar etapa Atendimento').item.json.resposta\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -1056,
+        -80
+      ],
+      "id": "8fa0b8c7-2935-44bb-a07f-999585121913",
+      "name": "Enviar Resposta Atendimento"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    model: \"qwen2.5:3b\",\n\n    messages: [\n      {\n        role: \"system\",\n        content: `Você é um classificador de pedidos de uma distribuidora de gás.\n\nAnalise SOMENTE a mensagem atual.\n\nRetorne SOMENTE JSON válido:\n\n{\n  \"intencao\": \"compra\" ou null\n}\n\nREGRAS:\n- - gás, gas, botijão, botijao, bujão ou bujao sem modelo = null.\n- P13 = P13.\n- P45 = P45.\n- Qualquer outro modelo, como P20, P30 ou P40 = null.\n- Quantidade somente se estiver explícita na mensagem.\n- um/uma = 1.\n- dois/duas = 2.\n- três/tres = 3.\n- quatro = 4.\n- cinco = 5.\n- Pix = PIX.\n- dinheiro = DINHEIRO.\n- cartão, cartao, crédito, credito, débito ou debito = CARTAO.\n- notinha ou a prazo = NOTINHA.\n- Se indicar compra de gás, intencao = compra.\n- Nunca invente informações.\n- Nunca use mensagens anteriores.\n- Retorne somente JSON, sem explicações.`\n      },\n      {\n        role: \"user\",\n        content: $json.mensagem_cliente\n      }\n    ],\n\n    format: \"json\",\n    stream: false,\n    keep_alive: \"30m\",\n\n    options: {\n      temperature: 0,\n      num_predict: 20\n    }\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -2336,
+        192
+      ],
+      "id": "de00cc22-d484-4419-946f-3db7bf669a37",
+      "name": "Interpretar Pedido"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 891422788,
+          "mode": "list",
+          "cachedResultName": "Produtos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Código",
+              "lookupValue": "={{ $json.produto }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1728,
+        112
+      ],
+      "id": "dbed27fc-98bb-48f1-ab50-94d1dfe10e61",
+      "name": "Buscar Produto Inicial",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 451256105,
+          "mode": "list",
+          "cachedResultName": "Atendimentos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Etapa": "={{ $json.etapa }}",
+            "Produto": "={{ $json.produto }}",
+            "Quantidade": "={{ $json.quantidade }}",
+            "Pagamento": "={{ $json.pagamento }}",
+            "Nome": "={{ $json.nome }}",
+            "Endereco": "={{ $json.endereco }}",
+            "UltimaAtualizacao": "={{ $now }}",
+            "ValorUnitario": "={{ $json.valor_unitario }}",
+            "ValorTotal": "={{ $json.valor_total }}",
+            "IDAtendimento": "={{ $json.id_atendimento }}",
+            "Telefone": "={{ $('Normalizar Mensagem').first().json.telefone || $('Normalizar Mensagem').first().json.Telefone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Telefone",
+              "displayName": "Telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Etapa",
+              "displayName": "Etapa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Produto",
+              "displayName": "Produto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Quantidade",
+              "displayName": "Quantidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pagamento",
+              "displayName": "Pagamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nome",
+              "displayName": "Nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Endereco",
+              "displayName": "Endereco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "UltimaAtualizacao",
+              "displayName": "UltimaAtualizacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorUnitario",
+              "displayName": "ValorUnitario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorTotal",
+              "displayName": "ValorTotal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IDAtendimento",
+              "displayName": "IDAtendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Troco",
+              "displayName": "Troco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1120,
+        224
+      ],
+      "id": "fa166e2a-e1c0-4fe6-b18c-db95f198921f",
+      "name": "Criar Atendimento",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/message/sendText/GasBot",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "COLE_AQUI_A_CHAVE_DA_EVOLUTION"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    number: $('Whatsapp').first().json.body.data.key.remoteJidAlt\n      ? $('Whatsapp').first().json.body.data.key.remoteJidAlt.replace('@s.whatsapp.net', '')\n      : $('Whatsapp').first().json.body.sender.replace('@s.whatsapp.net', ''),\n\n    text: $('Definir Etapa Inicial').first().json.proxima_pergunta\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -832,
+        224
+      ],
+      "id": "ef24013a-3412-402d-86be-fd0fbb679931",
+      "name": "Enviar Pergunta Inicial"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "21004abf-7bee-4924-b7da-6f103ea67dc4",
+              "leftValue": "={{ $json.assunto_gas === true || $json.atendimento_ativo === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3008,
+        -256
+      ],
+      "id": "9c4150ac-098d-4efa-9724-a06e30087099",
+      "name": "Pode entrar no agente?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\n\nconst mensagem = String(d.mensagem_cliente || \"\")\n  .toLowerCase()\n  .trim();\n\n// Palavras diretas relacionadas a gás\nconst palavrasGas = [\n  \"gás\",\n  \"gas\",\n  \"botijão\",\n  \"botijao\",\n  \"bujão\",\n  \"bujao\",\n  \"p13\",\n  \"p20\",\n  \"p45\",\n  \"galão\",\n  \"normal\",\n  \"cozinha\",\n  \"galao\",\n  \"recarga\"\n];\n\n// Frases/padrões indiretos que indicam intenção de pedido\nconst frasesIndiretasGas = [\n  \"acabou o gás\",\n  \"acabou o gas\",\n  \"sem gás\",\n  \"sem gas\",\n  \"trocar o gás\",\n  \"trocar o gas\",\n  \"entregam gás\",\n  \"entregam gas\",\n  \"vocês entregam\",\n  \"voces entregam\",\n  \"fazem entrega\",\n  \"tem pra hoje\",\n  \"preciso de um\",\n  \"quanto custa o gás\",\n  \"quanto custa o gas\",\n  \"quanto tá o gás\",\n  \"quero gas\",\n  \"quanto ta o gas\"\n];\n\nconst contemPalavraDireta = palavrasGas.some(palavra =>\n  mensagem.includes(palavra)\n);\n\nconst contemFraseIndireta = frasesIndiretasGas.some(frase =>\n  mensagem.includes(frase)\n);\n\nconst assuntoGas = contemPalavraDireta || contemFraseIndireta;\n\nreturn [{\n  json: {\n    ...d,\n    assunto_gas: assuntoGas\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4096,
+        -240
+      ],
+      "id": "216fac94-b8cf-4403-8acb-4e2187d876a5",
+      "name": "Assunto Gas"
+    },
+    {
+      "parameters": {
+        "jsCode": "const dados = JSON.parse($json.message.content);\n\n// NOVO: se a mensagem veio em áudio, usa o texto transcrito\nconst normalizada = $('Normalizar Mensagem').first().json;\nlet textoMensagem = normalizada.mensagem_cliente;\n\nif (normalizada.tipo_mensagem === \"audioMessage\") {\n  try {\n    textoMensagem = $('Montar texto do áudio').first().json.mensagem_cliente;\n  } catch (erro) {\n    // o áudio não foi transcrito: segue sem texto\n  }\n}\n\nconst mensagem = String(textoMensagem || \"\").toLowerCase().trim();\n\n\n// ============================================\n// QUANTIDADE\n// ============================================\n\nconst numerosPorExtenso = {\n  \"um\": 1,\n  \"uma\": 1,\n  \"dois\": 2,\n  \"duas\": 2,\n  \"três\": 3,\n  \"tres\": 3,\n  \"quatro\": 4,\n  \"cinco\": 5,\n  \"seis\": 6,\n  \"sete\": 7,\n  \"oito\": 8,\n  \"nove\": 9,\n  \"dez\": 10\n};\n\n// o \"13\" de \"P13\" e o \"45\" de \"P45\" não são quantidade\nconst mensagemParaQuantidade = mensagem\n  .replace(/\\bp[\\s-]?(13|45)\\b/g, \" \")\n  .replace(/\\b(13|45)\\s?(kg|quilos?)\\b/g, \" \");\n\nconst numeroDigitado = mensagemParaQuantidade.match(/\\b(\\d+)\\b/);\n\nlet quantidade = null;\n\nif (numeroDigitado) {\n  quantidade = Number(numeroDigitado[1]);\n}\nelse {\n  for (const [palavra, numero] of Object.entries(numerosPorExtenso)) {\n\n    const regex = new RegExp(`\\\\b${palavra}\\\\b`, \"i\");\n\n    if (regex.test(mensagem)) {\n      quantidade = numero;\n      break;\n    }\n  }\n}\n\nif (!quantidade || quantidade <= 0) {\n  quantidade = null;\n}\n\n\n// ============================================\n// PRODUTO\n// ============================================\n\nlet produto = null;\n\nconst mencionouP45 = /\\bp[\\s-]?45\\b/i.test(mensagem);\n// NOVO: \"gás normal\", \"gás de cozinha\", \"botijão comum\"... é o P13\nconst mensagemSemAcento = mensagem.normalize(\"NFD\").replace(/[̀-ͯ]/g, \"\");\nconst mencionouP13 =\n  /\\bp[\\s-]?13\\b/i.test(mensagem) ||\n  /\\b(ga[sz]|botijao|bujao)\\s+(de\\s+cozinha|normal|comum|residencial|domestico|padrao)\\b/.test(mensagemSemAcento);\n\n// P45\nif (mencionouP45) {\n  produto = \"P45\";\n}\n\n// P13\nelse if (mencionouP13) {\n  produto = \"P13\";\n}\n\n// Outro modelo informado: P20, P30, P40 etc.\n// Não aceitar como P13.\nelse if (/\\bp\\d+\\b/i.test(mensagem)) {\n  produto = null;\n}\n\n// Nenhum modelo informado.\n// Ex.: \"quero gás\", \"preciso de gás\", \"manda um gás\"\n// NÃO assumir P13.\nelse {\n  produto = null;\n}\n\n\n// ============================================\n// PAGAMENTO\n// ============================================\n\nlet pagamento = null;\n\nif (/\\bpix\\b/i.test(mensagem)) {\n  pagamento = \"PIX\";\n}\nelse if (/\\bdinheiro\\b/i.test(mensagem)) {\n  pagamento = \"DINHEIRO\";\n}\nelse if (\n  /\\bcartão\\b/i.test(mensagem) ||\n  /\\bcartao\\b/i.test(mensagem) ||\n  /\\bcrédito\\b/i.test(mensagem) ||\n  /\\bcredito\\b/i.test(mensagem) ||\n  /\\bdébito\\b/i.test(mensagem) ||\n  /\\bdebito\\b/i.test(mensagem)\n) {\n  pagamento = \"CARTAO\";\n}\nelse if (\n  /\\bnotinha\\b/i.test(mensagem) ||\n  /\\ba prazo\\b/i.test(mensagem)\n) {\n  pagamento = \"NOTINHA\";\n}\n\n\n// ============================================\n// INTENÇÃO\n// ============================================\n\nconst intencao = dados.intencao || null;\n\n\n// ============================================\n// RETORNO\n// ============================================\n\nreturn [\n  {\n    json: {\n      intencao,\n      produto,\n      quantidade,\n      pagamento\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2160,
+        192
+      ],
+      "id": "d04a3a56-212c-4b38-bbf6-bbc5ac245eaa",
+      "name": "Normalizar Dados"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst agora = new Date();\n\nconst idAtendimento =\n  \"ATD-\" +\n  agora.getFullYear() +\n  String(agora.getMonth() + 1).padStart(2, \"0\") +\n  String(agora.getDate()).padStart(2, \"0\") +\n  \"-\" +\n  String(agora.getTime()).slice(-6);\n\nlet etapa = \"\";\nlet proximaPergunta = \"\";\n\nlet nomeAnterior = \"\";\nlet enderecoAnterior = \"\";\n\n// ============================================\n// BUSCAR DADOS DO CLIENTE ANTERIOR\n// ============================================\n\ntry {\n  const anterior = $('Selecionar Atendimento Atual').first().json;\n\n  nomeAnterior = String(anterior.Nome || \"\").trim();\n  enderecoAnterior = String(anterior.Endereco || \"\").trim();\n\n} catch (e) {\n  // Cliente novo, sem histórico\n}\n\n\n// ============================================\n// COPIAR NOME E ENDEREÇO PARA O NOVO ATENDIMENTO\n// ============================================\n\nif (nomeAnterior) {\n  d.nome = nomeAnterior;\n}\n\nif (enderecoAnterior) {\n  d.endereco = enderecoAnterior;\n}\n\n\n// ============================================\n// REFORÇO: LER O PEDIDO DIRETO DA MENSAGEM\n// ============================================\n// Se o interpretador não marcou o produto ou a quantidade, tenta de novo\n// pelo texto: \"gás de cozinha\", \"gás normal\", \"botijão comum\" = P13.\n\nlet textoPedido = \"\";\n\ntry {\n  const original = $('Normalizar Mensagem').first().json;\n  textoPedido = String(original.mensagem_cliente || \"\");\n\n  if (original.tipo_mensagem === \"audioMessage\") {\n    textoPedido = String($('Montar texto do áudio').first().json.mensagem_cliente || textoPedido);\n  }\n} catch (e) {\n  // sem texto: segue com o que já veio\n}\n\nconst textoSemAcento = textoPedido\n  .toLowerCase()\n  .normalize(\"NFD\")\n  .replace(/[̀-ͯ]/g, \"\");\n\nif (!d.produto) {\n  if (/\\bp[\\s-]?45\\b/.test(textoSemAcento)) {\n    d.produto = \"P45\";\n  } else if (\n    /\\bp[\\s-]?13\\b/.test(textoSemAcento) ||\n    /\\b(ga[sz]|botijao|bujao)\\s+(de\\s+cozinha|normal|comum|residencial|domestico|padrao)\\b/.test(textoSemAcento)\n  ) {\n    d.produto = \"P13\";\n  }\n}\n\nif (!d.quantidade) {\n  const porExtenso = { um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10 };\n  // o \"13\" de \"P13\" e o \"45\" de \"P45\" não são quantidade\n  const textoParaQuantidade = textoSemAcento\n    .replace(/\\bp[\\s-]?(13|45)\\b/g, \" \")\n    .replace(/\\b(13|45)\\s?(kg|quilos?)\\b/g, \" \");\n  const digitado = textoParaQuantidade.match(/\\b(\\d{1,2})\\b/);\n\n  if (digitado && Number(digitado[1]) > 0 && Number(digitado[1]) <= 50) {\n    d.quantidade = Number(digitado[1]);\n  } else {\n    for (const [palavra, numero] of Object.entries(porExtenso)) {\n      if (new RegExp(\"\\\\b\" + palavra + \"\\\\b\").test(textoSemAcento)) {\n        d.quantidade = numero;\n        break;\n      }\n    }\n  }\n}\n\n// ============================================\n// DEFINIR PRÓXIMA ETAPA\n// ============================================\n\n// NOVO: cliente sem cadastro (primeiro atendimento) informa nome e endereço\n// antes de qualquer pergunta do pedido. O que ele já disse (produto,\n// quantidade, pagamento) continua salvo e é retomado depois.\nconst temCadastro = Boolean(nomeAnterior && enderecoAnterior);\n\nif (!temCadastro) {\n\n  etapa = \"AGUARDANDO_NOME\";\n\n  proximaPergunta =\n    \"Olá! 😊 Para começar, qual é o seu nome?\";\n}\n\nelse if (!d.produto) {\n\n  etapa = \"AGUARDANDO_PRODUTO\";\n\n  proximaPergunta =\n    \"Qual botijão você deseja?\";\n}\n\nelse if (!d.quantidade) {\n\n  etapa = \"AGUARDANDO_QUANTIDADE\";\n\n  proximaPergunta =\n    \"Quantos botijões você deseja?\";\n}\n\nelse if (!d.pagamento) {\n\n  etapa = \"AGUARDANDO_PAGAMENTO\";\n\n  proximaPergunta =\n    \"Como deseja pagar? Pode ser Pix, cartão, dinheiro ou notinha.\";\n}\n\nelse {\n\n  etapa = \"CONFIRMAR_DADOS\";\n\n  proximaPergunta =\n    `Encontrei seus dados anteriores:\\n\\n` +\n    `Nome: ${nomeAnterior}\\n` +\n    `Endereço: ${enderecoAnterior}\\n\\n` +\n    `Posso usar esses dados para esta entrega? Responda SIM ou NÃO.`;\n}\n\n\n// NOVO: cliente que já tem cadastro (2º pedido em diante) recebe um aviso amigável\n// antes da primeira pergunta.\nif (temCadastro) {\n  proximaPergunta =\n    `Olá, ${nomeAnterior}! 😊 Só um instante, já vamos prosseguir com seu atendimento.\\n\\n` +\n    proximaPergunta;\n}\n\n// Registra a conversa como ativa (usado pelo \"Filtro antes da planilha\")\nconst registro = $getWorkflowStaticData('global');\nregistro.ativos = registro.ativos || {};\n\n// mesma chave usada no filtro (ignora o \"9\" extra do celular)\nfunction chaveTelefone(telefone) {\n  const digitos = String(telefone || \"\").replace(/\\D/g, \"\");\n  const semPais = digitos.startsWith(\"55\") && digitos.length >= 12 ? digitos.slice(2) : digitos;\n\n  return semPais.length >= 10 ? semPais.slice(0, 2) + semPais.slice(-8) : digitos;\n}\n\nconst normalizada = $('Normalizar Mensagem').first().json;\nconst chaveNova = chaveTelefone(normalizada.telefone || normalizada.Telefone);\n\nif (chaveNova) {\n  registro.ativos[chaveNova] = Date.now();\n}\n\n// ============================================\n// RETORNO\n// ============================================\n\nreturn [{\n  json: {\n    ...d,\n\n    etapa,\n\n    nome: d.nome || \"\",\n    endereco: d.endereco || \"\",\n\n    id_atendimento: idAtendimento,\n\n    proxima_pergunta: proximaPergunta\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        224
+      ],
+      "id": "0e30be43-2a94-4926-9c0b-198bd620ab35",
+      "name": "Definir Etapa Inicial"
+    },
+    {
+      "parameters": {
+        "jsCode": "const produtoSheet = $json;\n\nconst pedido = $('Normalizar Dados').item.json;\n\nconst quantidade = Number(pedido.quantidade || 1);\nconst pagamento = String(pedido.pagamento || \"\").toUpperCase();\n\nconst precoVista = Number(produtoSheet[\"Preço à Vista\"]);\nconst precoNotinha = Number(produtoSheet[\"Preço Notinha\"]);\n\nlet valorUnitario = null;\n\nif (pagamento === \"NOTINHA\") {\n  valorUnitario = precoNotinha;\n} else if (\n  pagamento === \"PIX\" ||\n  pagamento === \"DINHEIRO\" ||\n  pagamento === \"CARTAO\" ||\n  pagamento === \"CARTÃO\"\n) {\n  valorUnitario = precoVista;\n}\n\nconst valorTotal =\n  valorUnitario !== null\n    ? valorUnitario * quantidade\n    : null;\n\nreturn [\n  {\n    json: {\n      ...pedido,\n      ...produtoSheet,\n      valor_unitario: valorUnitario,\n      valor_total: valorTotal\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1520,
+        112
+      ],
+      "id": "ee1e75b3-2ce9-4556-a06e-a56bef057c1e",
+      "name": "Calcular Dados Iniciais"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fd400804-30f7-4ca2-a792-27ca1d59325a",
+              "leftValue": "={{ $json.produto }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": "={{ false }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1936,
+        192
+      ],
+      "id": "16422718-ad83-4c26-9148-f57379f00860",
+      "name": "Produto Informado?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "60fa176f-5ed7-4cc3-8b82-38590c7ac0d6",
+              "leftValue": "={{ $json.novo_atendimento }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2128,
+        -272
+      ],
+      "id": "302c86ba-0cb1-4f26-9ca2-cd43e4550718",
+      "name": "Precisa Criar Novo Atendimento?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "ID_DA_SUA_PLANILHA",
+          "mode": "list",
+          "cachedResultName": "Modelo_Planilha_Distribuidora_Gas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 451256105,
+          "mode": "list",
+          "cachedResultName": "Atendimentos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/ID_DA_SUA_PLANILHA/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Produto": "={{ $json.produto }}",
+            "Quantidade": "={{ $json.quantidade }}",
+            "Nome": "={{ $json.nome }}",
+            "Endereco": "={{ $json.endereco }}",
+            "Etapa": "={{ $json.etapa }}",
+            "Pagamento": "={{ $json.pagamento }}",
+            "ValorUnitario": "={{ $json.valor_unitario }}",
+            "ValorTotal": "={{ $json.valor_total }}",
+            "UltimaAtualizacao": "={{ $now }}",
+            "IDAtendimento": "={{ $json.id_atendimento }}",
+            "Telefone": "={{ $json.telefone || $json.Telefone }}",
+            "Troco": "={{ $('Processar etapa Atendimento').item.json.troco }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Telefone",
+              "displayName": "Telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Etapa",
+              "displayName": "Etapa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Produto",
+              "displayName": "Produto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Quantidade",
+              "displayName": "Quantidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Pagamento",
+              "displayName": "Pagamento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Nome",
+              "displayName": "Nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Endereco",
+              "displayName": "Endereco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "UltimaAtualizacao",
+              "displayName": "UltimaAtualizacao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorUnitario",
+              "displayName": "ValorUnitario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ValorTotal",
+              "displayName": "ValorTotal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "IDAtendimento",
+              "displayName": "IDAtendimento",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Troco",
+              "displayName": "Troco",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1920,
+        -528
+      ],
+      "id": "8558cbeb-c741-433e-bc87-8c95421cf4c7",
+      "name": "Criar Novo Atendimento",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SEU_ID_DE_CREDENCIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b684bc9e-571e-4d96-8980-93d2137e781c",
+              "leftValue": "={{ $('Processar etapa Atendimento').item.json.resposta }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1280,
+        -64
+      ],
+      "id": "20087ef1-53f4-4466-8387-6b701e5aad14",
+      "name": "Tem resposta para enviar?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "717f95ff-63d6-4ab1-af60-247f27453063",
+              "name": "mensagem_cliente",
+              "value": "={{ $json.body.data.message.conversation || $json.body.data.message.extendedTextMessage?.text || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "f0bd53db-061e-405f-b95c-edbb4c74c4f4",
+              "name": "Telefone",
+              "value": "={{ $json.body.data.key.remoteJidAlt }}",
+              "type": "string"
+            },
+            {
+              "id": "cd3efc3a-c630-49c5-83b5-4bf790d8a9c6",
+              "name": "tipo_mensagem",
+              "value": "={{ $json.body.data.messageType }}",
+              "type": "string"
+            },
+            {
+              "id": "32149512-ac32-4328-b5f8-fbf6fc82487e",
+              "name": "comprovante_recebido",
+              "value": "={{ !!$json.body?.data?.message?.imageMessage }}",
+              "type": "boolean"
+            },
+            {
+              "id": "cf3e5311-36b0-479a-b7ff-a09ceb6d7bef",
+              "name": "telefone_sender",
+              "value": "={{ $json.body.sender }}",
+              "type": "string"
+            },
+            {
+              "id": "4e20b5b9-f55a-473e-9f27-e9ceec8f82f5",
+              "name": "remoteJid",
+              "value": "={{ $json.body.data.key.remoteJid }}",
+              "type": "string"
+            },
+            {
+              "id": "1e9bfc2f-4545-4bb4-aff5-40f8179004b8",
+              "name": "fromMe",
+              "value": "={{ $json.body.data.key.fromMe }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -4432,
+        -256
+      ],
+      "id": "ebf8b2b8-7235-46d0-a4f5-58b378795d22",
+      "name": "Normalizar Mensagem"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0280eee7-e80d-48f3-a0be-254eb840073a",
+              "leftValue": "={{ $('Whatsapp').first().json.body.data.messageType === \"audioMessage\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4272,
+        -256
+      ],
+      "id": "d354664d-d848-42ef-9c30-79e0adbc6ea3",
+      "name": "É audio?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/chat/getBase64FromMediaMessage/GasBot",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "COLE_AQUI_A_CHAVE_DA_EVOLUTION"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": { \"key\": { \"id\": \"{{ $('Whatsapp').first().json.body.data.key.id }}\" } },\n  \"convertToMp4\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -4080,
+        -448
+      ],
+      "id": "1423d78d-008d-4cbf-a08a-df7cb5f50cb3",
+      "name": "Baixar Áudio"
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "base64",
+        "options": {
+          "fileName": "audio.ogg",
+          "mimeType": "audio/ogg"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -3856,
+        -448
+      ],
+      "id": "2259f9b8-170d-4916-86bb-7fb17b721bd9",
+      "name": "Converter áudio em arquivo"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node: Montar texto do áudio\n// Mode: Run Once for All Items\n\nconst original = $('Normalizar Mensagem').first().json;\nconst resultado = $input.first().json;\n\nfunction extrairTextoWhisper(resultado) {\n  // Tenta encontrar o texto em diferentes formatos de retorno.\n  if (typeof resultado.text === \"string\" && resultado.text.trim()) {\n    return resultado.text;\n  }\n\n  if (typeof resultado.transcription === \"string\") {\n    return resultado.transcription;\n  }\n\n  if (typeof resultado.transcript === \"string\") {\n    return resultado.transcript;\n  }\n\n  const dados = resultado.data;\n\n  if (dados && typeof dados === \"object\") {\n    return String(\n      dados.text ??\n      dados.transcription ??\n      dados.transcript ??\n      \"\"\n    );\n  }\n\n  if (typeof dados === \"string\") {\n    try {\n      const json = JSON.parse(dados);\n\n      return String(\n        json.text ??\n        json.transcription ??\n        json.transcript ??\n        \"\"\n      );\n    } catch (erro) {\n      return dados;\n    }\n  }\n\n  return \"\";\n}\n\nfunction normalizarFalaPedido(texto) {\n  let t = String(texto || \"\");\n\n  // Normaliza espaços e pontuação\n  t = t\n    .replace(/[.,!?;:]/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n\n  // Reconhece P13\n  t = t.replace(\n    /\\bp\\s*[-]?\\s*(?:13|treze|um três|um e três)\\b/gi,\n    \"P13\"\n  );\n\n  // Reconhece P45\n  t = t.replace(\n    /\\bp\\s*[-]?\\s*(?:45|quarenta e cinco|quarenta cinco)\\b/gi,\n    \"P45\"\n  );\n\n  // Reconhece botijão de 13 kg\n  t = t.replace(\n    /\\b(?:13|treze)\\s*(?:quilos?|kilos?|kg)\\b/gi,\n    \"P13\"\n  );\n\n  // Reconhece botijão de 45 kg\n  t = t.replace(\n    /\\b(?:45|quarenta e cinco)\\s*(?:quilos?|kilos?|kg)\\b/gi,\n    \"P45\"\n  );\n\n  // Reconhece pronúncias comuns de Pix\n  t = t.replace(\n    /\\b(?:pics|piks|picks|piques?|pixe|piquis|pi x|p i xis)\\b/gi,\n    \"Pix\"\n  );\n\n  // Padroniza espaços\n  t = t.replace(/\\s+/g, \" \").trim();\n\n  return t;\n}\n\nconst bruto = extrairTextoWhisper(resultado);\nconst mensagemNormalizada = normalizarFalaPedido(bruto);\n\nreturn [{\n  json: {\n    ...original,\n    mensagem_cliente: mensagemNormalizada,\n    veio_de_audio: true,\n\n    // Campos temporários para diagnóstico\n    texto_transcrito_bruto: bruto,\n    produto_detectado_no_audio: /\\bP13\\b/i.test(mensagemNormalizada)\n      ? \"P13\"\n      : /\\bP45\\b/i.test(mensagemNormalizada)\n        ? \"P45\"\n        : null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3408,
+        -448
+      ],
+      "id": "db2d9417-8fd0-4c46-9df7-2965904ff29a",
+      "name": "Montar texto do áudio"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:9000/asr",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "language",
+              "value": "pt"
+            },
+            {
+              "name": "output",
+              "value": "json"
+            },
+            {
+              "name": "task",
+              "value": "transcribe"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "audio_file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "name": "Transcrever áudio novo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3616,
+        -448
+      ],
+      "id": "9521d7d0-4eea-4370-9fdf-cb80512e8ffb"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "56296603-d6a0-4a04-83cf-d6f22b07f63f",
+              "leftValue": "={{ $json.body.event === 'messages.upsert' && !$json.body.data.key.fromMe && !String($json.body.data.key.remoteJid).endsWith('@g.us') && $json.body.data.key.remoteJid !== 'status@broadcast' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4640,
+        -240
+      ],
+      "id": "dc51e1fb-48fb-494e-b785-5210c1354023",
+      "name": "Mensagem Válida?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node: Filtro antes da planilha  (Code, \"Run Once for All Items\")\n// Fica entre \"Assunto Gas\" e o IF \"Consultar planilha?\".\n// Decide, sem usar a planilha, se vale consultar o atendimento deste telefone.\n\nconst HORAS_CONVERSA = 6; // quanto tempo uma conversa de gás fica \"aberta\" depois da última mensagem\n\nconst d = $input.first().json; // saída do Assunto Gas\n\n// mesma chave usada no Selecionar Atendimento Atual (ignora o \"9\" extra do celular)\nfunction chaveTelefone(telefone) {\n  const digitos = String(telefone || \"\").replace(/\\D/g, \"\");\n  const semPais = digitos.startsWith(\"55\") && digitos.length >= 12 ? digitos.slice(2) : digitos;\n\n  return semPais.length >= 10 ? semPais.slice(0, 2) + semPais.slice(-8) : digitos;\n}\n\nconst registro = $getWorkflowStaticData('global');\n\nif (!registro.ativos) {\n  registro.ativos = {};\n}\n\n// remove conversas sem atividade há muito tempo\nconst limite = Date.now() - HORAS_CONVERSA * 60 * 60 * 1000;\n\nfor (const [tel, quando] of Object.entries(registro.ativos)) {\n  if (Number(quando) < limite) {\n    delete registro.ativos[tel];\n  }\n}\n\nconst chave = chaveTelefone(d.telefone || d.Telefone);\nconst mensagem = String(d.mensagem_cliente || \"\").trim();\n\n// Reforço: reconhece gás mesmo com erro de escrita (\"gaz\", \"botijao\", \"bujão\")\nconst textoSemAcento = mensagem.toLowerCase().normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\");\nconst falouDeGas = /\\b(ga[sz]|botijao|botijoes|bujao|bujoes|p13|p45)\\b/.test(textoSemAcento);\n\nconst assuntoGas = d.assunto_gas === true || falouDeGas;\nconst conversaAtiva = Boolean(chave && registro.ativos[chave]);\nconst comprovante = d.comprovante_recebido === true;\n\nlet motivo = \"bloqueada\";\n\nif (!chave) {\n  motivo = \"sem telefone\";\n} else if (assuntoGas) {\n  motivo = \"gas\";\n} else if (conversaAtiva) {\n  motivo = \"conversa\";\n} else if (comprovante) {\n  motivo = \"comprovante\";\n}\n\nconst consultar = motivo !== \"bloqueada\" && motivo !== \"sem telefone\";\n\n// Falou de gás ou está numa conversa: registra/renova (no máximo 1 gravação por minuto)\nif ((assuntoGas || conversaAtiva) && chave) {\n  const ultima = Number(registro.ativos[chave] || 0);\n\n  if (Date.now() - ultima > 60 * 1000) {\n    registro.ativos[chave] = Date.now();\n  }\n}\n\nreturn [{\n  json: {\n    ...d,\n    assunto_gas: assuntoGas,\n    conversa_ativa: conversaAtiva,\n    consultar_planilha: consultar,\n    motivo_consulta: motivo\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3872,
+        -240
+      ],
+      "id": "321af4ca-ba20-457f-b2ae-342c3a39f66e",
+      "name": "Filtro antes da planilha"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9d719f55-331b-477b-bdbd-3e4116ce2f8c",
+              "leftValue": "={{ $json.consultar_planilha }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3680,
+        -240
+      ],
+      "id": "b09677bf-1105-4660-ab16-408d3465c4d9",
+      "name": "Consultar Planilha"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node: Preparar Voz  (Code, \"Run Once for Each Item\")\n// Entrada: a saída de QUALQUER node que acabou de enviar texto pela Evolution API.\n// A resposta da Evolution traz o texto enviado em message.conversation.\n\nconst enviado = $json.message || {};\n\nlet resposta = String(enviado.conversation || enviado.extendedTextMessage?.text || \"\");\n\n// Plano B, se a resposta da Evolution não trouxer o texto\nif (!resposta) {\n  try {\n    resposta = String($('Processar etapa Atendimento').item.json.resposta || \"\");\n  } catch (e) {\n    // segue\n  }\n}\n\nif (!resposta) {\n  try {\n    resposta = String($('Definir Etapa Inicial').item.json.proxima_pergunta || \"\");\n  } catch (e) {\n    // segue\n  }\n}\n\nconst veioDeAudio = $('Normalizar Mensagem').first().json.tipo_mensagem === \"audioMessage\";\n\n// ---------- ajustes para a voz falar de forma natural ----------\n\nconst digitos = [\"zero\", \"um\", \"dois\", \"três\", \"quatro\", \"cinco\", \"seis\", \"sete\", \"oito\", \"nove\"];\n\nfunction digitosPorExtenso(numero) {\n  return String(numero).split(\"\").map(d => digitos[Number(d)]).join(\" \");\n}\n\nfunction textoParaFala(texto) {\n  return String(texto || \"\")\n    // não lê o eco \"Entendi: ...\" da transcrição\n    .replace(/Entendi: \".*?\"\\s*/s, \"\")\n    // emojis\n    .replace(/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}️]/gu, \"\")\n    // telefone / chave Pix: fala dígito por dígito, em grupos\n    .replace(/\\(?(\\d{2})\\)?\\s?(\\d{4,5})-?(\\d{4})/g, (_, ddd, meio, fim) =>\n      digitosPorExtenso(ddd) + \", \" + digitosPorExtenso(meio) + \", \" + digitosPorExtenso(fim))\n    // dinheiro: R$ 200,00 -> 200 reais ; R$ 20,50 -> 20 reais e 50 centavos\n    .replace(/R\\$\\s*(\\d+),(\\d{2})/g, (_, reais, centavos) =>\n      centavos === \"00\" ? reais + \" reais\" : reais + \" reais e \" + centavos + \" centavos\")\n    .replace(/R\\$\\s*(\\d+)/g, \"$1 reais\")\n    // produtos e palavras que a voz lê errado\n    .replace(/\\bP13\\b/gi, \"pê treze\")\n    .replace(/\\bP45\\b/gi, \"pê quarenta e cinco\")\n    .replace(/\\bpix\\b/gi, \"pics\")\n    .replace(/\\bValor unitário\\b/gi, \"Valor de cada botijão\")\n    // abreviações de endereço\n    .replace(/\\bAv\\.?(?=\\s)/g, \"Avenida\")\n    .replace(/\\bapto\\.?/gi, \"apartamento\")\n    .replace(/\\bs\\/n\\b/gi, \"sem número\")\n    // palavras em maiúsculas (SIM, NÃO) viram minúsculas, senão a voz soletra\n    .replace(/\\b[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{2,}\\b/g, p => p.toLowerCase())\n    // pontuação: tom calmo, sem gritar\n    .replace(/!/g, \".\")\n    .replace(/\\s*\\(/g, \", \").replace(/\\)/g, \"\")\n    .replace(/\\s*\\n+\\s*/g, \". \")\n    .replace(/:/g, \",\")\n    .replace(/([.,?])\\s*[.,]/g, \"$1\")\n    .replace(/\\s+/g, \" \")\n    .trim()\n    .slice(0, 800);\n}\n\nconst texto = textoParaFala(resposta);\n\nreturn {\n  json: {\n    falar: veioDeAudio && texto.length > 0,\n    texto_voz: texto,\n    // para quem enviar o áudio (vem da própria resposta da Evolution)\n    numero: $json.key?.remoteJid || \"\"\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        -80
+      ],
+      "id": "1d8ddd29-1dc1-4784-8dee-3bbcfe4c917b",
+      "name": "Preparar Voz"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "96f4d6fe-1d90-41b5-a099-fe19013365de",
+              "leftValue": "={{ $json.falar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -704,
+        -80
+      ],
+      "id": "b2eb792f-427d-4566-9593-ba1c30902bc9",
+      "name": "Falar em áudio?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5051/v1/audio/speech",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"piper\", voice: \"pt_BR-faber-medium\", input: $json.texto_voz, response_format: \"mp3\" }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -480,
+        -96
+      ],
+      "id": "c3b86e2c-4ff4-4139-a7c0-16cd14410c6e",
+      "name": "Gerar voz"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/message/sendWhatsAppAudio/GasBot",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "COLE_AQUI_A_CHAVE_DA_EVOLUTION"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Whatsapp').first().json.body.data.key.remoteJid.replace('@s.whatsapp.net', ''), audio: $json.data, delay: 1200 }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -128,
+        -96
+      ],
+      "id": "315615be-87fa-4269-9f9d-047ae077ecc5",
+      "name": "Enviar Áudio"
+    },
+    {
+      "parameters": {
+        "jsCode": "const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n\nreturn [{ json: { data: buffer.toString('base64') } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        -96
+      ],
+      "id": "06d7d26f-2f4e-4bbd-9f0d-382d52355d38",
+      "name": "Áudio em base64"
+    }
+  ],
+  "connections": {
+    "Calcular Preço": {
+      "main": [
+        [
+          {
+            "node": "Apos Calcular Preço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apos Calcular Preço": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Preço Atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whatsapp": {
+      "main": [
+        [
+          {
+            "node": "Mensagem Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Atendimento Cliente": {
+      "main": [
+        [
+          {
+            "node": "Selecionar Atendimento Atual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selecionar Atendimento Atual": {
+      "main": [
+        [
+          {
+            "node": "Pode entrar no agente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cliente possui atendimento?": {
+      "main": [
+        [
+          {
+            "node": "Atendiemento está ativo?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Interpretar Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atendiemento está ativo?": {
+      "main": [
+        [
+          {
+            "node": "Processar etapa Atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Interpretar Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar etapa Atendimento": {
+      "main": [
+        [
+          {
+            "node": "Precisa Criar Novo Atendimento?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar Atendimento": {
+      "main": [
+        [
+          {
+            "node": "Precisa Calcular Preço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa Calcular Preço": {
+      "main": [
+        [
+          {
+            "node": "Buscar preço do produto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deve criar Pedido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar preço do produto": {
+      "main": [
+        [
+          {
+            "node": "Calcular Preço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar Preço Atendimento": {
+      "main": [
+        [
+          {
+            "node": "Confirmar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deve criar Pedido?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tem resposta para enviar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Pedido": {
+      "main": [
+        [
+          {
+            "node": "Buscar Pedido Existente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Pedido Existente": {
+      "main": [
+        [
+          {
+            "node": "Pedido já existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedido já existe?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Criar Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Pedido": {
+      "main": [
+        [
+          {
+            "node": "Finalizar Atendimento Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalizar Atendimento Pedido": {
+      "main": [
+        [
+          {
+            "node": "Enviar Pedido Atendido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Resposta Atendimento": {
+      "main": [
+        [
+          {
+            "node": "Preparar Voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar Pedido": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Produto Inicial": {
+      "main": [
+        [
+          {
+            "node": "Calcular Dados Iniciais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Atendimento": {
+      "main": [
+        [
+          {
+            "node": "Enviar Pergunta Inicial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assunto Gas": {
+      "main": [
+        [
+          {
+            "node": "Filtro antes da planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pode entrar no agente?": {
+      "main": [
+        [
+          {
+            "node": "Cliente possui atendimento?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Dados": {
+      "main": [
+        [
+          {
+            "node": "Produto Informado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Definir Etapa Inicial": {
+      "main": [
+        [
+          {
+            "node": "Criar Atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Dados Iniciais": {
+      "main": [
+        [
+          {
+            "node": "Definir Etapa Inicial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Produto Informado?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Produto Inicial",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Definir Etapa Inicial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa Criar Novo Atendimento?": {
+      "main": [
+        [
+          {
+            "node": "Criar Novo Atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Atualizar Atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Novo Atendimento": {
+      "main": [
+        [
+          {
+            "node": "Precisa Calcular Preço",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem resposta para enviar?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Resposta Atendimento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "É audio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É audio?": {
+      "main": [
+        [
+          {
+            "node": "Baixar Áudio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assunto Gas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar Áudio": {
+      "main": [
+        [
+          {
+            "node": "Converter áudio em arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converter áudio em arquivo": {
+      "main": [
+        [
+          {
+            "node": "Transcrever áudio novo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar texto do áudio": {
+      "main": [
+        [
+          {
+            "node": "Assunto Gas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcrever áudio novo": {
+      "main": [
+        [
+          {
+            "node": "Montar texto do áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem Válida?": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtro antes da planilha": {
+      "main": [
+        [
+          {
+            "node": "Consultar Planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Planilha": {
+      "main": [
+        [
+          {
+            "node": "Buscar Atendimento Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Voz": {
+      "main": [
+        [
+          {
+            "node": "Falar em áudio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Falar em áudio?": {
+      "main": [
+        [
+          {
+            "node": "Gerar voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar voz": {
+      "main": [
+        [
+          {
+            "node": "Áudio em base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Áudio em base64": {
+      "main": [
+        [
+          {
+            "node": "Enviar Áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Pergunta Inicial": {
+      "main": [
+        [
+          {
+            "node": "Preparar Voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar Dados": {
+      "main": [
+        [
+          {
+            "node": "Preparar Voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Pedido Atendido": {
+      "main": [
+        [
+          {
+            "node": "Preparar Voz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveExecutionProgress": true
+  }
+}
